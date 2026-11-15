@@ -41,6 +41,12 @@ func handleServiceError(c *gin.Context, err error) {
 		writeError(c, http.StatusNotFound, "resource not found")
 	case errors.Is(err, services.ErrInvalidInput):
 		writeError(c, http.StatusBadRequest, "invalid input")
+	case errors.Is(err, services.ErrConflict):
+		writeError(c, http.StatusConflict, "resource already exists or setup is complete")
+	case errors.Is(err, services.ErrUnauthorized):
+		writeError(c, http.StatusUnauthorized, "invalid credentials or expired session")
+	case errors.Is(err, services.ErrForbidden), errors.Is(err, services.ErrLastAdmin):
+		writeError(c, http.StatusForbidden, "operation not allowed")
 	default:
 		log.Printf("request failed: %v", err)
 		writeError(c, http.StatusInternalServerError, "internal server error")

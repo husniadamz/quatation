@@ -11,7 +11,7 @@ import (
 type CustomerRepository interface {
 	Create(context.Context, *models.Customer) error
 	Get(context.Context, uint) (*models.Customer, error)
-	List(context.Context, int, int) ([]models.Customer, int64, error)
+	List(context.Context, string, int, int) ([]models.Customer, int64, error)
 	Update(context.Context, *models.Customer) error
 	Delete(context.Context, uint) error
 }
@@ -34,10 +34,14 @@ func (r *customerRepository) Get(ctx context.Context, id uint) (*models.Customer
 	return &customer, nil
 }
 
-func (r *customerRepository) List(ctx context.Context, offset, limit int) ([]models.Customer, int64, error) {
+func (r *customerRepository) List(ctx context.Context, search string, offset, limit int) ([]models.Customer, int64, error) {
 	var customers []models.Customer
 	var total int64
 	query := r.db.WithContext(ctx).Model(&models.Customer{})
+	if search != "" {
+		pattern := "%" + search + "%"
+		query = query.Where("name LIKE ? OR email LIKE ? OR phone LIKE ?", pattern, pattern, pattern)
+	}
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}

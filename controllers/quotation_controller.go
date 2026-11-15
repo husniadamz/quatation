@@ -69,12 +69,26 @@ func (h *QuotationController) List(c *gin.Context) {
 	if !ok {
 		return
 	}
-	quotations, total, err := h.service.List(c.Request.Context(), page, pageSize)
+	quotations, total, err := h.service.List(c.Request.Context(), c.Query("search"), c.Query("status"), page, pageSize)
 	if err != nil {
 		handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": quotations, "meta": gin.H{"page": page, "page_size": pageSize, "total": total}})
+}
+
+func (h *QuotationController) Dashboard(c *gin.Context) {
+	stats, err := h.service.Stats(c.Request.Context())
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	recent, _, err := h.service.List(c.Request.Context(), "", "", 1, 5)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{"stats": stats, "recent_quotations": recent}})
 }
 
 func (h *QuotationController) Get(c *gin.Context) {

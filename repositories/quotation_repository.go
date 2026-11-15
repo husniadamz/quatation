@@ -11,7 +11,8 @@ import (
 type QuotationRepository interface {
 	Create(context.Context, *models.Quotation) error
 	Get(context.Context, uint) (*models.Quotation, error)
-	List(context.Context, int, int) ([]models.Quotation, int64, error)
+	List(context.Context, string, string, int, int) ([]models.Quotation, int64, error)
+	Stats(context.Context) (map[string]int64, error)
 	Update(context.Context, *models.Quotation) error
 	UpdateStatus(context.Context, uint, string) error
 	Delete(context.Context, uint) error
@@ -36,15 +37,50 @@ func (r *quotationRepository) Get(ctx context.Context, id uint) (*models.Quotati
 	return &quotation, nil
 }
 
-func (r *quotationRepository) List(ctx context.Context, offset, limit int) ([]models.Quotation, int64, error) {
+func (r *quotationRepository) List(ctx context.Context, search, status string, offset, limit int) ([]models.Quotation, int64, error) {
 	var quotations []models.Quotation
 	var total int64
 	query := r.db.WithContext(ctx).Model(&models.Quotation{})
+	if search != "" {
+		pattern := "%" + search + "%"
+		query = query.Joins("LEFT JOIN customers ON customers.id = quotations.customer_id").
+			Where("quotations.number LIKE ? OR customers.name LIKE ?", pattern, pattern)
+	}
+	if status != "" {
+		query = query.Where("quotations.status = ?", status)
+	}
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	err := query.Preload("Customer").Preload("Items").Order("id DESC").Offset(offset).Limit(limit).Find(&quotations).Error
+	err := query.Preload("Customer").Preload("Items").Order("quotations.id DESC").Offset(offset).Limit(limit).Find(&quotations).Error
 	return quotations, total, err
+}
+
+func (r *quotationRepository) Stats(ctx context.Context) (map[string]int64, error) {
+	stats := map[string]int64{"total": 0, "pending": 0, "approved": 0, "rejected": 0}
+	query := r.db.WithContext(ctx).Model(&models.Quotation{})
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, err
+	}
+	stats["total"] = total
+	for status, target := range map[string]string{
+		"approved": "accepted", "rejected": "rejected",
+	} {
+		var count int64
+		if err := r.db.WithContext(ctx).Model(&models.Quotation{}).Where("status = ?", target).Count(&count).Error; err != nil {
+			return nil, err
+		}
+		stats[status] = count
+	}
+	var pending int64
+	if err := r.db.WithContext(ctx).Model(&models.Quotation{}).
+		Where("status IN ?", []string{models.StatusDraft, models.StatusSent}).
+		Count(&pending).Error; err != nil {
+		return nil, err
+	}
+	stats["pending"] = pending
+	return stats, nil
 }
 
 func (r *quotationRepository) Update(ctx context.Context, quotation *models.Quotation) error {

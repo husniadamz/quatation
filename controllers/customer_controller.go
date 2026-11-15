@@ -44,7 +44,7 @@ func (h *CustomerController) List(c *gin.Context) {
 	if !ok {
 		return
 	}
-	customers, total, err := h.service.List(c.Request.Context(), page, pageSize)
+	customers, total, err := h.service.List(c.Request.Context(), c.Query("search"), page, pageSize)
 	if err != nil {
 		handleServiceError(c, err)
 		return

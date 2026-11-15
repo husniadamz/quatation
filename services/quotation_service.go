@@ -33,7 +33,8 @@ type QuotationInput struct {
 type QuotationService interface {
 	Create(context.Context, QuotationInput) (*models.Quotation, error)
 	Get(context.Context, uint) (*models.Quotation, error)
-	List(context.Context, int, int) ([]models.Quotation, int64, error)
+	List(context.Context, string, string, int, int) ([]models.Quotation, int64, error)
+	Stats(context.Context) (map[string]int64, error)
 	Update(context.Context, uint, QuotationInput) (*models.Quotation, error)
 	UpdateStatus(context.Context, uint, string) (*models.Quotation, error)
 	Delete(context.Context, uint) error
@@ -87,8 +88,12 @@ func (s *quotationService) Get(ctx context.Context, id uint) (*models.Quotation,
 	return quotation, err
 }
 
-func (s *quotationService) List(ctx context.Context, page, pageSize int) ([]models.Quotation, int64, error) {
-	return s.repo.List(ctx, (page-1)*pageSize, pageSize)
+func (s *quotationService) List(ctx context.Context, search, status string, page, pageSize int) ([]models.Quotation, int64, error) {
+	return s.repo.List(ctx, search, status, (page-1)*pageSize, pageSize)
+}
+
+func (s *quotationService) Stats(ctx context.Context) (map[string]int64, error) {
+	return s.repo.Stats(ctx)
 }
 
 func (s *quotationService) Update(ctx context.Context, id uint, input QuotationInput) (*models.Quotation, error) {

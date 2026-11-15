@@ -1,45 +1,52 @@
-# Quotation Management API
+# Quotely — Quotation Management
 
-A beginner-friendly REST API built with Go, Gin, GORM, and MySQL. It manages customers and quotations, calculates line totals, subtotal, tax, and grand total on the server, updates quotation statuses, and exports quotations as PDFs.
-
-## Requirements
-
-- Go 1.25 or newer
-- MySQL 8 or compatible
+A Go, Gin, GORM, and MySQL quotation manager with a responsive admin workspace, authentication, customer and quotation management, server-calculated totals, and downloadable PDFs.
 
 ## Run locally
 
+Requirements: Go 1.25+ and MySQL 8 (or compatible).
+
 1. Create a MySQL database, for example `quotation`.
-2. Copy `.env.example` to `.env` and set your database credentials.
-3. Start the API:
+2. Set database credentials in `.env` (see `.env.example`).
+3. Run `go run .` and open `http://localhost:8080/`.
+4. On first visit, create the workspace administrator. The initial setup endpoint is disabled after the first account is created.
 
-   ```powershell
-   go mod tidy
-   go run .
-   ```
+The app checks the database connection and automatically migrates its schema on startup. Override the listen port with `APP_ADDRESS=:8081`.
 
-The application checks the database connection, runs GORM `AutoMigrate`, and listens on `http://localhost:8080` by default. Configuration is read from `.env` or the process environment.
+To develop with Air live reload, run `air` from the repository root.
 
-Open `http://localhost:8080/` for the built-in browser interface. The JSON API is available at `http://localhost:8080/api/v1`.
+## Workspace features
+
+- Dashboard quotation counts (total, pending, approved, rejected) and recent activity.
+- Customer create, search, edit, view, pagination, and delete.
+- Quotation create, search, status filtering, edit, item management, calculated totals, preview, print, PDF download, and delete.
+- Team account creation and removal for administrators.
+- Responsive sidebar, navigation, forms, lists, and quotation preview.
+
+## Authentication
+
+The first user created through the browser setup flow is the administrator. Users sign in with email and password. Passwords are bcrypt-hashed; random bearer tokens are stored in the database as SHA-256 hashes and expire after 24 hours. Logout revokes the active token. Team-member management is administrator-only, and the final administrator cannot be removed.
 
 ## API
 
-All endpoints are prefixed with `/api/v1`. JSON endpoints return a `data` object (or list) and list endpoints include `meta` pagination information. Errors return `{"error":"..."}`.
+JSON endpoints are prefixed with `/api/v1`. Except for setup status, first-time setup, and login, endpoints require `Authorization: Bearer <token>`. Responses use a `data` object; paginated lists also include `meta`. Errors use `{"error":"..."}`.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/customers` | Create a customer |
-| `GET` | `/customers?page=1&page_size=20` | List customers |
-| `GET` | `/customers/:id` | Get a customer |
-| `PUT` | `/customers/:id` | Replace customer fields |
-| `DELETE` | `/customers/:id` | Delete a customer |
-| `POST` | `/quotations` | Create a quotation with items |
-| `GET` | `/quotations?page=1&page_size=20` | List quotations |
-| `GET` | `/quotations/:id` | Get a quotation |
-| `PUT` | `/quotations/:id` | Replace quotation details and items |
-| `PATCH` | `/quotations/:id/status` | Change quotation status |
-| `DELETE` | `/quotations/:id` | Delete a quotation |
-| `GET` | `/quotations/:id/pdf` | Download a quotation PDF |
+| `GET` | `/auth/setup` | Check whether first-time setup is required |
+| `POST` | `/auth/setup` | Create the first administrator |
+| `POST` | `/auth/login` | Sign in |
+| `GET` | `/auth/me` | Get the current account |
+| `POST` | `/auth/logout` | Revoke the current session |
+| `GET` | `/dashboard` | Dashboard statistics and recent quotations |
+| `GET`, `POST` | `/customers` | Search/list and create customers |
+| `GET`, `PUT`, `DELETE` | `/customers/:id` | View, edit, and delete a customer |
+| `GET`, `POST` | `/quotations` | Search/filter/list and create quotations |
+| `GET`, `PUT`, `DELETE` | `/quotations/:id` | View, edit, and delete a quotation |
+| `PATCH` | `/quotations/:id/status` | Update status |
+| `GET` | `/quotations/:id/pdf` | Download quotation PDF |
+| `GET`, `POST` | `/users` | List and create accounts (admin only) |
+| `DELETE` | `/users/:id` | Remove an account (admin only) |
 
 Quotation creation/update JSON example:
 
@@ -56,4 +63,4 @@ Quotation creation/update JSON example:
 }
 ```
 
-The API generates the quotation number and starts new quotations in `draft` status. Supported statuses are `draft`, `sent`, `accepted`, `rejected`, and `expired`. Monetary values are rounded to two decimal places. Pagination defaults to 20 records and is capped at 100.
+New quotations start in `draft`. Supported statuses are `draft`, `sent`, `accepted`, `rejected`, and `expired`. Monetary values are rounded to two decimal places. List endpoints support `page`, `page_size` (maximum 100), and `search`; quotations also support a `status` filter.
