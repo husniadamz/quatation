@@ -7,10 +7,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-//go:embed index.html
+//go:embed index.html styles.css app.js
 var files embed.FS
 
 func Register(router *gin.Engine) {
+	router.StaticFS("/assets", http.FS(files))
 	router.GET("/", func(c *gin.Context) {
 		content, err := files.ReadFile("index.html")
 		if err != nil {

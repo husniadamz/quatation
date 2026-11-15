@@ -20,8 +20,19 @@ To develop with Air live reload, run `air` from the repository root.
 - Dashboard quotation counts (total, pending, approved, rejected) and recent activity.
 - Customer create, search, edit, view, pagination, and delete.
 - Quotation create, search, status filtering, edit, item management, calculated totals, preview, print, PDF download, and delete.
-- Team account creation and removal for administrators.
+- Role-based access for administrators, Sales Executives, and Managers. Sales Executives manage customers and create/edit quotations. Managers review pending quotations and approve or reject them. Administrators manage all records and team access.
 - Responsive sidebar, navigation, forms, lists, and quotation preview.
+- Browser assets are maintained separately in `web/index.html`, `web/styles.css`, and `web/app.js`; role permissions are centralized in `middleware/permissions.go`.
+
+## Roles
+
+| Role | Customers | Quotations | Approvals | Team accounts |
+| --- | --- | --- | --- | --- |
+| Administrator | Full access | Full access | Full access | Create and remove |
+| Sales Executive | Create, view, edit, delete | Create, view, edit | None | None |
+| Manager | No access | Review and view | Approve or reject pending quotations | None |
+
+Administrators assign Sales Executive or Manager roles from **Team members**. Existing `user` accounts are treated as Sales Executives for compatibility.
 
 ## Authentication
 

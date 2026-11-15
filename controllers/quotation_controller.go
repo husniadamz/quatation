@@ -127,10 +127,31 @@ func (h *QuotationController) UpdateStatus(c *gin.Context) {
 	if !ok {
 		return
 	}
+	user, ok := currentUser(c)
+	if !ok {
+		writeError(c, http.StatusUnauthorized, "authentication required")
+		return
+	}
 	var request statusRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		writeError(c, http.StatusBadRequest, "invalid status")
 		return
+	}
+	if user.Role == models.RoleManager &&
+		request.Status != models.StatusAccepted && request.Status != models.StatusRejected {
+		writeError(c, http.StatusForbidden, "managers may only approve or reject quotations")
+		return
+	}
+	if user.Role == models.RoleManager {
+		quotation, err := h.service.Get(c.Request.Context(), id)
+		if err != nil {
+			handleServiceError(c, err)
+			return
+		}
+		if quotation.Status != models.StatusDraft && quotation.Status != models.StatusSent {
+			writeError(c, http.StatusConflict, "only pending quotations can be approved or rejected")
+			return
+		}
 	}
 	quotation, err := h.service.UpdateStatus(c.Request.Context(), id, request.Status)
 	if err != nil {

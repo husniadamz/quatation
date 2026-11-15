@@ -27,31 +27,30 @@ func New(customers *controllers.CustomerController, quotations *controllers.Quot
 	protected.Use(middleware.Authenticate(authService))
 	protected.GET("/auth/me", auth.Me)
 	protected.POST("/auth/logout", auth.Logout)
-	protected.GET("/dashboard", dashboard.Get)
-	customerRoutes := protected.Group("/customers")
+	protected.GET("/dashboard", middleware.RequirePermission(middleware.ResourceDashboard, middleware.ActionRead), dashboard.Get)
+	customerRoutes := protected.Group("/customers", middleware.RequirePermission(middleware.ResourceCustomers, middleware.ActionRead))
 	{
-		customerRoutes.POST("", customers.Create)
 		customerRoutes.GET("", customers.List)
 		customerRoutes.GET("/:id", customers.Get)
-		customerRoutes.PUT("/:id", customers.Update)
-		customerRoutes.DELETE("/:id", customers.Delete)
 	}
-	quotationRoutes := protected.Group("/quotations")
+	customerRoutes.POST("", middleware.RequirePermission(middleware.ResourceCustomers, middleware.ActionWrite), customers.Create)
+	customerRoutes.PUT("/:id", middleware.RequirePermission(middleware.ResourceCustomers, middleware.ActionWrite), customers.Update)
+	customerRoutes.DELETE("/:id", middleware.RequirePermission(middleware.ResourceCustomers, middleware.ActionDelete), customers.Delete)
+	quotationRoutes := protected.Group("/quotations", middleware.RequirePermission(middleware.ResourceQuotations, middleware.ActionRead))
 	{
-		quotationRoutes.POST("", quotations.Create)
 		quotationRoutes.GET("", quotations.List)
 		quotationRoutes.GET("/:id", quotations.Get)
-		quotationRoutes.PUT("/:id", quotations.Update)
-		quotationRoutes.PATCH("/:id/status", quotations.UpdateStatus)
-		quotationRoutes.DELETE("/:id", quotations.Delete)
 		quotationRoutes.GET("/:id/pdf", quotations.PDF)
 	}
-	userRoutes := protected.Group("/users")
-	userRoutes.Use(middleware.RequireAdmin())
+	quotationRoutes.POST("", middleware.RequirePermission(middleware.ResourceQuotations, middleware.ActionWrite), quotations.Create)
+	quotationRoutes.PUT("/:id", middleware.RequirePermission(middleware.ResourceQuotations, middleware.ActionWrite), quotations.Update)
+	quotationRoutes.PATCH("/:id/status", middleware.RequirePermission(middleware.ResourceQuotations, middleware.ActionApprove), quotations.UpdateStatus)
+	quotationRoutes.DELETE("/:id", middleware.RequirePermission(middleware.ResourceQuotations, middleware.ActionDelete), quotations.Delete)
+	userRoutes := protected.Group("/users", middleware.RequirePermission(middleware.ResourceUsers, middleware.ActionRead))
 	{
 		userRoutes.GET("", auth.ListUsers)
-		userRoutes.POST("", auth.CreateUser)
-		userRoutes.DELETE("/:id", auth.DeleteUser)
+		userRoutes.POST("", middleware.RequirePermission(middleware.ResourceUsers, middleware.ActionWrite), auth.CreateUser)
+		userRoutes.DELETE("/:id", middleware.RequirePermission(middleware.ResourceUsers, middleware.ActionDelete), auth.DeleteUser)
 	}
 	return router, nil
 }

@@ -2,11 +2,6 @@ package models
 
 import "time"
 
-const (
-	RoleAdmin = "admin"
-	RoleUser  = "user"
-)
-
 type User struct {
 	ID           uint      `json:"id" gorm:"primaryKey"`
 	Name         string    `json:"name" gorm:"size:150;not null"`

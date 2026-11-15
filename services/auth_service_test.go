@@ -46,6 +46,22 @@ func TestNewUserRejectsWeakPasswordsAndInvalidRoles(t *testing.T) {
 	}
 }
 
+func TestNewUserAcceptsSalesAndManagerRoles(t *testing.T) {
+	for _, role := range []string{models.RoleSalesExecutive, models.RoleManager} {
+		t.Run(role, func(t *testing.T) {
+			user, err := newUser(UserInput{
+				Name: "Alex", Email: "alex@example.com", Password: "strong-password-123",
+			}, role)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if user.Role != role {
+				t.Fatalf("user role = %q, want %q", user.Role, role)
+			}
+		})
+	}
+}
+
 func TestTokenHashDoesNotExposeRawToken(t *testing.T) {
 	token := "a-private-session-token"
 	hash := tokenHash(token)

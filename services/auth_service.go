@@ -156,7 +156,8 @@ func newUser(input UserInput, role string) (*models.User, error) {
 		len(input.Password) > 72 || !validEmail(email) {
 		return nil, ErrInvalidInput
 	}
-	if role != models.RoleAdmin && role != models.RoleUser {
+	if role != models.RoleAdmin && role != models.RoleUser &&
+		role != models.RoleSalesExecutive && role != models.RoleManager {
 		return nil, ErrInvalidInput
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
