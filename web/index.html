@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quotation Manager</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+      color: #172033;
+      background: #f3f6fb;
+      font-synthesis: none;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 22px max(24px, calc((100% - 1180px) / 2));
+      color: white;
+      background: #172b4d;
+    }
+    header h1 { margin: 0; font-size: 21px; letter-spacing: .2px; }
+    header span { color: #c8d4e8; font-size: 13px; }
+    main { max-width: 1180px; margin: 32px auto; padding: 0 24px 48px; }
+    .intro { margin-bottom: 24px; }
+    .intro h2 { margin: 0 0 6px; font-size: 25px; }
+    .intro p { margin: 0; color: #667085; }
+    .layout { display: grid; grid-template-columns: minmax(270px, .75fr) minmax(0, 1.6fr); gap: 20px; align-items: start; }
+    .stack { display: grid; gap: 20px; }
+    .card { border: 1px solid #e3e8f0; border-radius: 12px; background: white; box-shadow: 0 3px 12px #243b5310; }
+    .card h3 { margin: 0; padding: 18px 20px; border-bottom: 1px solid #edf0f5; font-size: 16px; }
+    .card-body { padding: 18px 20px; }
+    label { display: block; margin: 0 0 6px; color: #475467; font-size: 13px; font-weight: 600; }
+    input, select, textarea {
+      width: 100%; min-height: 40px; padding: 9px 11px; border: 1px solid #d0d5dd;
+      border-radius: 7px; background: #fff; color: #172033; font: inherit; font-size: 14px;
+    }
+    textarea { min-height: 76px; resize: vertical; }
+    input:focus, select:focus, textarea:focus { outline: 3px solid #dce9ff; border-color: #4677cb; }
+    .field { margin-bottom: 14px; }
+    button {
+      min-height: 38px; padding: 8px 13px; border: 0; border-radius: 7px;
+      color: white; background: #2459a6; font: inherit; font-size: 13px;
+      font-weight: 650; cursor: pointer;
+    }
+    button:hover { background: #194983; }
+    button.secondary { color: #344054; background: #eef2f7; }
+    button.secondary:hover { background: #e1e7ef; }
+    button.danger { color: #b42318; background: #fff0ee; }
+    button.small { min-height: 30px; padding: 5px 9px; }
+    .form-actions { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+    .items { display: grid; gap: 8px; margin: 10px 0 14px; }
+    .item-row { display: grid; grid-template-columns: minmax(100px, 1fr) 76px 95px 34px; gap: 7px; }
+    .item-row button { padding: 0; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+    th { padding: 11px 12px; color: #667085; background: #f8fafc; font-weight: 650; white-space: nowrap; }
+    td { padding: 12px; border-top: 1px solid #edf0f5; vertical-align: middle; }
+    td select { min-width: 112px; min-height: 34px; padding: 5px 8px; }
+    .muted { color: #667085; }
+    .empty { padding: 24px; color: #667085; text-align: center; }
+    .notice { margin-bottom: 16px; padding: 11px 14px; border-radius: 8px; display: none; font-size: 14px; }
+    .notice.error { display: block; color: #912018; background: #feeceb; }
+    .notice.success { display: block; color: #17663a; background: #e9f7ef; }
+    .total { font-weight: 700; white-space: nowrap; }
+    .actions { display: flex; gap: 6px; align-items: center; }
+    @media (max-width: 850px) {
+      .layout { grid-template-columns: 1fr; }
+      header { padding-left: 20px; padding-right: 20px; }
+      main { margin-top: 24px; }
+    }
+    @media (max-width: 520px) {
+      main { padding: 0 14px 32px; }
+      .item-row { grid-template-columns: 1fr 64px 82px 32px; gap: 5px; }
+      .card-body { padding: 15px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Quotation Manager</h1>
+    <span>Customer &amp; quotation workspace</span>
+  </header>
+  <main>
+    <section class="intro">
+      <h2>Overview</h2>
+      <p>Create customers, prepare quotations, track their status, and download PDFs.</p>
+    </section>
+    <div id="notice" class="notice" role="status" aria-live="polite"></div>
+    <div class="layout">
+      <div class="stack">
+        <section class="card">
+          <h3>Add customer</h3>
+          <div class="card-body">
+            <form id="customer-form">
+              <div class="field"><label for="customer-name">Name</label><input id="customer-name" name="name" maxlength="150" required></div>
+              <div class="field"><label for="customer-email">Email</label><input id="customer-email" name="email" type="email" maxlength="255"></div>
+              <div class="field"><label for="customer-phone">Phone</label><input id="customer-phone" name="phone" maxlength="40"></div>
+              <div class="field"><label for="customer-address">Address</label><textarea id="customer-address" name="address" maxlength="5000"></textarea></div>
+              <button type="submit">Save customer</button>
+            </form>
+          </div>
+        </section>
+        <section class="card">
+          <h3>New quotation</h3>
+          <div class="card-body">
+            <form id="quotation-form">
+              <div class="field"><label for="customer-select">Customer</label><select id="customer-select" required><option value="">Select a customer</option></select></div>
+              <div class="field"><label for="tax-rate">Tax rate (%)</label><input id="tax-rate" type="number" min="0" max="100" step="0.01" value="0" required></div>
+              <label>Items</label>
+              <div id="items" class="items"></div>
+              <div class="form-actions" style="margin-bottom:14px">
+                <button id="add-item" class="secondary small" type="button">+ Add item</button>
+                <span id="estimate" class="muted">Subtotal: 0.00</span>
+              </div>
+              <div class="field"><label for="notes">Notes</label><textarea id="notes" maxlength="5000"></textarea></div>
+              <button type="submit">Create quotation</button>
+            </form>
+          </div>
+        </section>
+      </div>
+      <div class="stack">
+        <section class="card">
+          <h3>Quotations</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Number</th><th>Customer</th><th>Status</th><th>Total</th><th>Actions</th></tr></thead>
+              <tbody id="quotations"></tbody>
+            </table>
+            <div id="quotation-empty" class="empty" hidden>No quotations yet. Create one to get started.</div>
+          </div>
+        </section>
+        <section class="card">
+          <h3>Customers</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Actions</th></tr></thead>
+              <tbody id="customers"></tbody>
+            </table>
+            <div id="customer-empty" class="empty" hidden>No customers yet. Add a customer to get started.</div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+  <script>
+    const api = "/api/v1";
+    const statuses = ["draft", "sent", "accepted", "rejected", "expired"];
+    const notice = document.querySelector("#notice");
+    const money = new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    let customers = [];
+
+    function showNotice(message, isError = false) {
+      notice.textContent = message;
+      notice.className = `notice ${isError ? "error" : "success"}`;
+      window.setTimeout(() => { notice.className = "notice"; }, 4000);
+    }
+
+    async function request(path, options = {}) {
+      const response = await fetch(`${api}${path}`, options);
+      if (!response.ok) {
+        let message = `Request failed (${response.status})`;
+        try {
+          const body = await response.json();
+          if (body.error) message = body.error;
+        } catch (_) {}
+        throw new Error(message);
+      }
+      if (response.status === 204) return null;
+      return response.json();
+    }
+
+    function cell(row, text, className = "") {
+      const element = document.createElement("td");
+      element.textContent = text ?? "";
+      if (className) element.className = className;
+      row.append(element);
+      return element;
+    }
+
+    async function loadCustomers() {
+      const result = await request("/customers?page=1&page_size=100");
+      customers = result.data;
+      const body = document.querySelector("#customers");
+      body.replaceChildren();
+      for (const customer of customers) {
+        const row = document.createElement("tr");
+        cell(row, customer.name);
+        cell(row, customer.email);
+        cell(row, customer.phone);
+        const actions = document.createElement("td");
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "danger small";
+        remove.textContent = "Delete";
+        remove.addEventListener("click", async () => {
+          if (!confirm(`Delete ${customer.name}?`)) return;
+          try {
+            await request(`/customers/${customer.id}`, { method: "DELETE" });
+            await refresh();
+            showNotice("Customer deleted.");
+          } catch (error) { showNotice(error.message, true); }
+        });
+        actions.append(remove);
+        row.append(actions);
+        body.append(row);
+      }
+      document.querySelector("#customer-empty").hidden = customers.length > 0;
+      const select = document.querySelector("#customer-select");
+      const current = select.value;
+      select.replaceChildren(new Option("Select a customer", ""));
+      for (const customer of customers) select.add(new Option(customer.name, customer.id));
+      if (customers.some((customer) => String(customer.id) === current)) select.value = current;
+    }
+
+    async function loadQuotations() {
+      const result = await request("/quotations?page=1&page_size=100");
+      const body = document.querySelector("#quotations");
+      body.replaceChildren();
+      for (const quotation of result.data) {
+        const row = document.createElement("tr");
+        cell(row, quotation.number);
+        cell(row, quotation.customer?.name || "—");
+        const statusCell = document.createElement("td");
+        const status = document.createElement("select");
+        for (const value of statuses) status.add(new Option(value, value));
+        status.value = quotation.status;
+        status.setAttribute("aria-label", `Status for ${quotation.number}`);
+        status.addEventListener("change", async () => {
+          try {
+            await request(`/quotations/${quotation.id}/status`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ status: status.value })
+            });
+            showNotice("Quotation status updated.");
+          } catch (error) {
+            status.value = quotation.status;
+            showNotice(error.message, true);
+          }
+        });
+        statusCell.append(status);
+        row.append(statusCell);
+        cell(row, money.format(quotation.grand_total), "total");
+        const actions = document.createElement("td");
+        const group = document.createElement("div");
+        group.className = "actions";
+        const pdf = document.createElement("button");
+        pdf.type = "button";
+        pdf.className = "secondary small";
+        pdf.textContent = "PDF";
+        pdf.addEventListener("click", () => { window.location.href = `${api}/quotations/${quotation.id}/pdf`; });
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "danger small";
+        remove.textContent = "Delete";
+        remove.addEventListener("click", async () => {
+          if (!confirm(`Delete quotation ${quotation.number}?`)) return;
+          try {
+            await request(`/quotations/${quotation.id}`, { method: "DELETE" });
+            await loadQuotations();
+            showNotice("Quotation deleted.");
+          } catch (error) { showNotice(error.message, true); }
+        });
+        group.append(pdf, remove);
+        actions.append(group);
+        row.append(actions);
+        body.append(row);
+      }
+      document.querySelector("#quotation-empty").hidden = result.data.length > 0;
+    }
+
+    async function refresh() {
+      await Promise.all([loadCustomers(), loadQuotations()]);
+    }
+
+    function addItemRow(description = "", quantity = "", unitPrice = "") {
+      const row = document.createElement("div");
+      row.className = "item-row";
+      const descriptionInput = document.createElement("input");
+      descriptionInput.placeholder = "Description";
+      descriptionInput.setAttribute("aria-label", "Item description");
+      descriptionInput.maxLength = 255;
+      descriptionInput.required = true;
+      descriptionInput.value = description;
+      const quantityInput = document.createElement("input");
+      quantityInput.type = "number";
+      quantityInput.placeholder = "Qty";
+      quantityInput.setAttribute("aria-label", "Item quantity");
+      quantityInput.min = "0.01";
+      quantityInput.step = "0.01";
+      quantityInput.required = true;
+      quantityInput.value = quantity;
+      const priceInput = document.createElement("input");
+      priceInput.type = "number";
+      priceInput.placeholder = "Price";
+      priceInput.setAttribute("aria-label", "Unit price");
+      priceInput.min = "0";
+      priceInput.step = "0.01";
+      priceInput.required = true;
+      priceInput.value = unitPrice;
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "danger";
+      remove.textContent = "×";
+      remove.setAttribute("aria-label", "Remove item");
+      remove.addEventListener("click", () => {
+        if (document.querySelectorAll(".item-row").length > 1) row.remove();
+        updateEstimate();
+      });
+      for (const input of [quantityInput, priceInput]) input.addEventListener("input", updateEstimate);
+      row.append(descriptionInput, quantityInput, priceInput, remove);
+      document.querySelector("#items").append(row);
+    }
+
+    function updateEstimate() {
+      let subtotal = 0;
+      for (const row of document.querySelectorAll(".item-row")) {
+        const inputs = row.querySelectorAll("input");
+        subtotal += Math.round((Number(inputs[1].value || 0) * Number(inputs[2].value || 0) + Number.EPSILON) * 100) / 100;
+      }
+      const tax = Number(document.querySelector("#tax-rate").value || 0);
+      const total = subtotal + Math.round((subtotal * tax / 100 + Number.EPSILON) * 100) / 100;
+      document.querySelector("#estimate").textContent = `Total: ${money.format(total)}`;
+    }
+
+    document.querySelector("#customer-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+      try {
+        await request("/customers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data)
+        });
+        event.currentTarget.reset();
+        await loadCustomers();
+        showNotice("Customer created.");
+      } catch (error) { showNotice(error.message, true); }
+    });
+
+    document.querySelector("#quotation-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const items = [...document.querySelectorAll(".item-row")].map((row) => {
+        const inputs = row.querySelectorAll("input");
+        return { description: inputs[0].value, quantity: Number(inputs[1].value), unit_price: Number(inputs[2].value) };
+      });
+      const payload = {
+        customer_id: Number(document.querySelector("#customer-select").value),
+        tax_rate: Number(document.querySelector("#tax-rate").value),
+        notes: document.querySelector("#notes").value,
+        items
+      };
+      try {
+        await request("/quotations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        event.currentTarget.reset();
+        document.querySelector("#items").replaceChildren();
+        addItemRow();
+        updateEstimate();
+        await loadQuotations();
+        showNotice("Quotation created.");
+      } catch (error) { showNotice(error.message, true); }
+    });
+
+    document.querySelector("#add-item").addEventListener("click", () => addItemRow());
+    document.querySelector("#tax-rate").addEventListener("input", updateEstimate);
+    addItemRow();
+    refresh().catch((error) => showNotice(error.message, true));
+  </script>
+</body>
+</html>
