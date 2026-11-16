@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -24,6 +25,7 @@ type QuotationItemInput struct {
 
 type QuotationInput struct {
 	CustomerID uint
+	TemplateID *uint
 	TaxRate    float64
 	Notes      string
 	ValidUntil *time.Time
@@ -43,6 +45,7 @@ type QuotationService interface {
 type quotationService struct {
 	repo         repositories.QuotationRepository
 	customerRepo repositories.CustomerRepository
+	templateRepo repositories.QuotationTemplateRepository
 }
 
 const (
@@ -50,8 +53,9 @@ const (
 	maxMoney    = 9999999999.99
 )
 
-func NewQuotationService(repo repositories.QuotationRepository, customerRepo repositories.CustomerRepository) QuotationService {
-	return &quotationService{repo: repo, customerRepo: customerRepo}
+func NewQuotationService(repo repositories.QuotationRepository, customerRepo repositories.CustomerRepository,
+	templateRepo repositories.QuotationTemplateRepository) QuotationService {
+	return &quotationService{repo: repo, customerRepo: customerRepo, templateRepo: templateRepo}
 }
 
 func (s *quotationService) Create(ctx context.Context, input QuotationInput) (*models.Quotation, error) {
@@ -64,12 +68,17 @@ func (s *quotationService) Create(ctx context.Context, input QuotationInput) (*m
 		return nil, err
 	}
 
+	templateID, snapshot, err := s.templateSnapshot(ctx, input.TemplateID)
+	if err != nil {
+		return nil, err
+	}
 	number, err := newQuotationNumber()
 	if err != nil {
 		return nil, fmt.Errorf("generate quotation number: %w", err)
 	}
 	quotation := &models.Quotation{
 		Number: number, CustomerID: input.CustomerID, Status: models.StatusDraft,
+		TemplateID: templateID, TemplateSnapshot: json.RawMessage(snapshot),
 		TaxRate: roundMoney(input.TaxRate), Notes: strings.TrimSpace(input.Notes), ValidUntil: input.ValidUntil,
 		Items: makeItems(input.Items),
 	}
@@ -110,6 +119,14 @@ func (s *quotationService) Update(ctx context.Context, id uint, input QuotationI
 		return nil, err
 	}
 	quotation.CustomerID = input.CustomerID
+	if input.TemplateID != nil {
+		templateID, snapshot, err := s.templateSnapshot(ctx, input.TemplateID)
+		if err != nil {
+			return nil, err
+		}
+		quotation.TemplateID = templateID
+		quotation.TemplateSnapshot = json.RawMessage(snapshot)
+	}
 	quotation.TaxRate = roundMoney(input.TaxRate)
 	quotation.Notes = strings.TrimSpace(input.Notes)
 	quotation.ValidUntil = input.ValidUntil
@@ -120,7 +137,38 @@ func (s *quotationService) Update(ctx context.Context, id uint, input QuotationI
 	} else if err != nil {
 		return nil, err
 	}
+
 	return s.Get(ctx, id)
+}
+
+func (s *quotationService) templateSnapshot(ctx context.Context, id *uint) (*uint, string, error) {
+	if id == nil {
+		return nil, "", nil
+	}
+	if s.templateRepo == nil {
+		return nil, "", ErrInvalidInput
+	}
+	template, err := s.templateRepo.GetActive(ctx, *id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, "", ErrNotFound
+		}
+		if errors.Is(err, repositories.ErrTemplateInactive) {
+			return nil, "", ErrInvalidInput
+		}
+		return nil, "", err
+	}
+	snapshot := models.QuotationTemplateSnapshot{
+		ID: template.ID, CompanyName: template.CompanyName, Name: template.Name,
+		Settings: template.Settings, LogoPath: template.LogoPath,
+		LogoURL: templateLogoURL(*template), LogoContentType: template.LogoContentType,
+	}
+	encoded, err := json.Marshal(snapshot)
+	if err != nil {
+		return nil, "", fmt.Errorf("encode quotation template snapshot: %w", err)
+	}
+	templateID := template.ID
+	return &templateID, string(encoded), nil
 }
 
 func (s *quotationService) UpdateStatus(ctx context.Context, id uint, status string) (*models.Quotation, error) {

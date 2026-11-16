@@ -47,6 +47,10 @@ func handleServiceError(c *gin.Context, err error) {
 		writeError(c, http.StatusUnauthorized, "invalid credentials or expired session")
 	case errors.Is(err, services.ErrForbidden), errors.Is(err, services.ErrLastAdmin):
 		writeError(c, http.StatusForbidden, "operation not allowed")
+	case errors.Is(err, services.ErrTemplateInactive):
+		writeError(c, http.StatusBadRequest, "template is inactive")
+	case errors.Is(err, services.ErrInvalidLogo):
+		writeError(c, http.StatusBadRequest, "logo must be a valid PNG or JPEG under 2 MB")
 	default:
 		log.Printf("request failed: %v", err)
 		writeError(c, http.StatusInternalServerError, "internal server error")

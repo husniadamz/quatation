@@ -27,6 +27,7 @@
         <button class="active" data-page="dashboard"><span class="nav-icon">⌂</span><span class="nav-text">Dashboard</span></button>
         <button data-page="quotations"><span class="nav-icon">▤</span><span class="nav-text">Quotations</span></button>
         <button data-page="customers" id="customers-nav"><span class="nav-icon">♙</span><span class="nav-text">Customers</span></button>
+        <button data-page="templates" id="templates-nav" hidden><span class="nav-icon">▧</span><span class="nav-text">Quote templates</span></button>
         <button data-page="users" id="users-nav" hidden><span class="nav-icon">⚙</span><span class="nav-text">Team members</span></button>
       </nav>
       <div class="sidebar-bottom">
@@ -96,6 +97,15 @@
             <div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Joined</th><th>Actions</th></tr></thead><tbody id="user-rows"></tbody></table><div id="user-empty" class="empty" hidden>No team members yet.</div></div>
           </section>
         </section>
+
+        <section id="page-templates" class="page">
+          <div class="page-heading">
+            <div><h2>Quotation templates</h2><p>Design branded quotation layouts for each company.</p></div>
+            <button id="add-template" class="button">＋ &nbsp;New template</button>
+          </div>
+          <div id="template-grid" class="template-grid"></div>
+          <div id="template-empty" class="panel empty" hidden>No templates yet. Create a branded template for your company.</div>
+        </section>
       </main>
     </div>
   </div>
@@ -123,6 +133,7 @@
       <div class="dialog-body">
         <div class="form-grid">
           <div class="field"><label for="quote-customer">Customer</label><select id="quote-customer" required></select></div>
+          <div class="field"><label for="quote-template">Quotation template</label><select id="quote-template" required></select></div>
           <div class="field"><label for="quote-tax">Tax rate (%)</label><input id="quote-tax" type="number" min="0" max="100" step="0.01" value="0" required></div>
           <div class="field full"><label for="quote-valid">Valid until</label><input id="quote-valid" type="date"></div>
         </div>
@@ -133,6 +144,40 @@
         <div id="quote-totals" class="totals"></div>
       </div>
       <div class="dialog-foot"><button class="button secondary" type="button" data-close="quotation-dialog">Cancel</button><button class="button" type="submit">Create quotation</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="template-dialog" class="template-dialog">
+    <form id="template-form">
+      <div class="dialog-head"><h3 id="template-dialog-title">New quotation template</h3><button class="close" type="button" data-close="template-dialog" aria-label="Close">×</button></div>
+      <div class="template-editor">
+        <div class="template-fields">
+          <div class="form-grid">
+            <div class="field"><label for="template-company">Company name</label><input id="template-company" name="company_name" maxlength="180" required></div>
+            <div class="field"><label for="template-name">Template name</label><input id="template-name" name="name" maxlength="120" required></div>
+            <div class="field"><label for="template-email">Company email</label><input id="template-email" type="email" maxlength="255"></div>
+            <div class="field"><label for="template-phone">Company phone</label><input id="template-phone" maxlength="60"></div>
+            <div class="field full"><label for="template-address">Company address</label><textarea id="template-address" maxlength="2000"></textarea></div>
+            <div class="field"><label for="template-title">Quotation heading</label><input id="template-title" maxlength="120" value="Quotation"></div>
+            <div class="field"><label for="template-font">Font</label><select id="template-font"><option>Arial</option><option>Helvetica</option><option>Times</option><option>Courier</option></select></div>
+            <div class="field full"><label for="template-header">Header message</label><textarea id="template-header" maxlength="2000"></textarea></div>
+            <div class="field full"><label for="template-footer">Footer</label><textarea id="template-footer" maxlength="2000"></textarea></div>
+            <div class="field"><label for="template-primary">Primary color</label><div class="color-field"><input id="template-primary" type="color" value="#264a73"><span>Headings and table header</span></div></div>
+            <div class="field"><label for="template-accent">Accent color</label><div class="color-field"><input id="template-accent" type="color" value="#d6a94b"><span>Separators and highlights</span></div></div>
+            <div class="field"><label for="template-layout">Page layout</label><select id="template-layout"><option value="portrait">Portrait — A4</option><option value="landscape">Landscape — A4</option></select></div>
+            <div class="field"><label for="template-logo">Company logo (PNG/JPEG, max 2 MB)</label><input id="template-logo" type="file" accept="image/png,image/jpeg"></div>
+            <div class="field full"><label for="template-payment">Payment details</label><textarea id="template-payment" maxlength="4000" placeholder="Bank, account name, account number…"></textarea></div>
+            <div class="field full"><label for="template-terms">Terms and conditions</label><textarea id="template-terms" maxlength="10000"></textarea></div>
+            <div class="field full"><label for="template-signature">Signature section label</label><input id="template-signature" maxlength="120" placeholder="Authorized signature"></div>
+            <div class="field full template-flags"><label><input id="template-active" type="checkbox" checked> Active — available to Sales Executives</label><label><input id="template-default" type="checkbox"> Default for this company</label></div>
+          </div>
+        </div>
+        <div class="template-preview-wrap">
+          <div class="preview-caption"><span>LIVE PREVIEW</span><span id="template-preview-layout">A4 · Portrait</span></div>
+          <div id="template-live-preview" class="template-paper"></div>
+        </div>
+      </div>
+      <div class="dialog-foot"><button class="button secondary" type="button" data-close="template-dialog">Cancel</button><button class="button" type="submit">Save template</button></div>
     </form>
   </dialog>
 

@@ -2,7 +2,7 @@ const api = "/api/v1";
     const tokenKey = "quotely-session";
     const statuses = ["draft", "sent", "accepted", "rejected", "expired"];
     const money = new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const state = { user: null, customers: [], quotePage: 1, customerPage: 1, quoteSearch: "", customerSearch: "", quoteStatus: "", previewID: null };
+    const state = { user: null, customers: [], templates: [], quotePage: 1, customerPage: 1, quoteSearch: "", customerSearch: "", quoteStatus: "", previewID: null, templatePreviewURL: null, quotationPreviewLogoURL: null };
     const authForm = document.querySelector("#auth-form");
     const authFields = document.querySelector("#auth-fields");
     const authError = document.querySelector("#auth-error");
@@ -22,7 +22,7 @@ const api = "/api/v1";
       const headers = new Headers(options.headers || {});
       const token = sessionStorage.getItem(tokenKey);
       if (token) headers.set("Authorization", `Bearer ${token}`);
-      if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+      if (options.body && !(options.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
       const response = await fetch(`${api}${path}`, { ...options, headers });
       if (!response.ok) {
         let message = `Request failed (${response.status})`;
@@ -72,6 +72,10 @@ const api = "/api/v1";
 
     function canManageCustomers() {
       return currentRole() === "admin" || currentRole() === "sales_executive";
+    }
+
+    function canManageTemplates() {
+      return currentRole() === "admin";
     }
 
     function showAuth(setup) {
@@ -128,6 +132,7 @@ const api = "/api/v1";
       document.querySelector("#profile-role").textContent = roleName(state.user.role);
       document.querySelector("#profile-avatar").textContent = initials(state.user.name);
       document.querySelector("#users-nav").hidden = role !== "admin";
+      document.querySelector("#templates-nav").hidden = !canManageTemplates();
       document.querySelector("#customers-nav").hidden = !canManageCustomers();
       document.querySelector("#customer-quick-card").hidden = !canManageCustomers();
       document.querySelector("#dashboard-new-quotation").hidden = role === "manager";
@@ -136,6 +141,7 @@ const api = "/api/v1";
       document.querySelector("#quotation-status-heading").textContent = role === "manager" ? "Approval" : "Status";
       document.querySelector("#today").textContent = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date());
       const tasks = [loadDashboard(), loadQuotations()];
+      if (role === "admin" || role === "sales_executive") tasks.push(loadTemplates());
       if (canManageCustomers()) tasks.push(loadCustomers());
       await Promise.all(tasks);
     }
@@ -173,14 +179,16 @@ const api = "/api/v1";
 
     function navigate(page) {
       if (page === "users" && currentRole() !== "admin") return;
+      if (page === "templates" && !canManageTemplates()) return;
       if (page === "customers" && !canManageCustomers()) return;
       document.querySelectorAll(".page").forEach((section) => section.classList.toggle("active", section.id === `page-${page}`));
       document.querySelectorAll(".nav [data-page]").forEach((button) => button.classList.toggle("active", button.dataset.page === page));
-      document.querySelector("#topbar-title").textContent = ({ dashboard: "Dashboard", customers: "Customers", quotations: "Quotations", users: "Team members" })[page];
+      document.querySelector("#topbar-title").textContent = ({ dashboard: "Dashboard", customers: "Customers", quotations: "Quotations", users: "Team members", templates: "Quotation templates" })[page];
       if (page === "dashboard") loadDashboard().catch((error) => showNotice(error.message, true));
       if (page === "customers") loadCustomers().catch((error) => showNotice(error.message, true));
       if (page === "quotations") loadQuotations().catch((error) => showNotice(error.message, true));
       if (page === "users") loadUsers().catch((error) => showNotice(error.message, true));
+      if (page === "templates") loadTemplates().catch((error) => showNotice(error.message, true));
     }
 
     document.querySelectorAll("[data-page]").forEach((button) => button.addEventListener("click", () => navigate(button.dataset.page)));
@@ -248,6 +256,219 @@ const api = "/api/v1";
       for (const customer of state.customers) select.add(new Option(customer.name, customer.id));
       if (state.customers.some((customer) => String(customer.id) === selected)) select.value = selected;
     }
+
+    async function loadTemplates() {
+      const query = canManageTemplates() ? "" : "?active_only=true";
+      const result = await request(`/templates${query}`);
+      state.templates = result.data;
+      const select = document.querySelector("#quote-template");
+      const selected = select.value;
+      select.replaceChildren(new Option("Choose a quotation template", ""));
+      for (const template of state.templates.filter((item) => item.is_active)) {
+        const label = `${template.company_name} — ${template.name}${template.is_default ? " (Default)" : ""}`;
+        select.add(new Option(label, template.id));
+      }
+      if (state.templates.some((template) => String(template.id) === selected && template.is_active)) {
+        select.value = selected;
+      } else {
+        const defaultTemplate = state.templates.find((template) => template.is_active && template.is_default) ||
+          state.templates.find((template) => template.is_active);
+        if (defaultTemplate) select.value = defaultTemplate.id;
+      }
+      if (canManageTemplates()) renderTemplates();
+    }
+
+    function renderTemplates() {
+      const grid = document.querySelector("#template-grid");
+      grid.replaceChildren();
+      for (const template of state.templates) {
+        const card = document.createElement("article");
+        card.className = "template-card";
+        const swatch = esc(template.settings.primary_color || "#264a73");
+        const accent = esc(template.settings.accent_color || "#d6a94b");
+        card.innerHTML = `<div class="template-card-top"><span class="template-mark" style="--template-color:${swatch};--template-accent:${accent}">Q</span><div class="template-card-badges">${template.is_default ? '<span class="template-tag default">Default</span>' : ""}<span class="template-tag ${template.is_active ? "active" : "inactive"}">${template.is_active ? "Active" : "Inactive"}</span></div></div><h3>${esc(template.name)}</h3><p>${esc(template.company_name)}</p><div class="template-card-detail">${esc(template.settings.font_family || "Arial")} · ${esc(template.settings.layout || "portrait")}</div><div class="template-card-actions"><button class="text-button" data-preview>Preview</button><button class="text-button" data-edit>Edit</button><button class="text-button" data-toggle>${template.is_active ? "Deactivate" : "Activate"}</button>${template.is_default ? "" : '<button class="text-button" data-default>Set default</button>'}<button class="text-button delete" data-delete>Delete</button></div>`;
+        card.querySelector("[data-preview]").addEventListener("click", () => previewTemplate(template));
+        card.querySelector("[data-edit]").addEventListener("click", () => openTemplateEditor(template));
+        card.querySelector("[data-toggle]").addEventListener("click", () => setTemplateActive(template, !template.is_active));
+        card.querySelector("[data-default]")?.addEventListener("click", () => setTemplateDefault(template));
+        card.querySelector("[data-delete]").addEventListener("click", () => deleteTemplate(template));
+        grid.append(card);
+      }
+      document.querySelector("#template-empty").hidden = state.templates.length > 0;
+    }
+
+    async function setTemplateActive(template, active) {
+      try {
+        await request(`/templates/${template.id}/active`, { method: "PATCH", body: JSON.stringify({ is_active: active }) });
+        await loadTemplates();
+        showNotice(active ? "Template activated." : "Template deactivated.");
+      } catch (error) { showNotice(error.message, true); }
+    }
+
+    async function setTemplateDefault(template) {
+      try {
+        await request(`/templates/${template.id}/default`, { method: "PATCH", body: "{}" });
+        await loadTemplates();
+        showNotice("Default template updated for this company.");
+      } catch (error) { showNotice(error.message, true); }
+    }
+
+    async function deleteTemplate(template) {
+      if (!confirm(`Delete template "${template.name}"? Existing quotation PDFs keep their saved template snapshot.`)) return;
+      try {
+        await request(`/templates/${template.id}`, { method: "DELETE" });
+        await loadTemplates();
+        showNotice("Template deleted.");
+      } catch (error) { showNotice(error.message, true); }
+    }
+
+    document.querySelector("#add-template").addEventListener("click", () => openTemplateEditor());
+
+    async function openTemplateEditor(template = null, previewOnly = false) {
+      const form = document.querySelector("#template-form");
+      form.reset();
+      form.dataset.id = template?.id || "";
+      document.querySelector("#template-dialog-title").textContent = template ? "Edit quotation template" : "New quotation template";
+      form.querySelector('[type="submit"]').textContent = template ? "Save changes" : "Save template";
+      document.querySelector("#template-active").checked = template?.is_active ?? true;
+      document.querySelector("#template-default").checked = template?.is_default ?? false;
+      document.querySelector("#template-primary").value = template?.settings.primary_color || "#264a73";
+      document.querySelector("#template-accent").value = template?.settings.accent_color || "#d6a94b";
+      document.querySelector("#template-title").value = template?.settings.header_title || "Quotation";
+      document.querySelector("#template-font").value = template?.settings.font_family || "Arial";
+      document.querySelector("#template-layout").value = template?.settings.layout || "portrait";
+      for (const [field, key] of [
+        ["template-company", "company_name"], ["template-name", "name"],
+        ["template-email", "company_email"], ["template-phone", "company_phone"],
+        ["template-address", "company_address"], ["template-header", "header_text"],
+        ["template-footer", "footer_text"], ["template-payment", "payment_details"],
+        ["template-terms", "terms"], ["template-signature", "signature_label"]
+      ]) {
+        const setting = template?.settings?.[key];
+        document.querySelector(`#${field}`).value = field === "template-company" || field === "template-name"
+          ? template?.[key] || ""
+          : setting || "";
+      }
+      document.querySelector("#template-logo").value = "";
+      if (state.templateLogoURL) URL.revokeObjectURL(state.templateLogoURL);
+      state.templateLogoURL = "";
+      updateTemplatePreview();
+      document.querySelector("#template-dialog").showModal();
+      if (template?.logo_url) {
+        try {
+          const response = await fetch(template.logo_url, {
+            headers: { Authorization: `Bearer ${sessionStorage.getItem(tokenKey)}` }
+          });
+          if (!response.ok) throw new Error("Unable to load template logo");
+          state.templateLogoURL = URL.createObjectURL(await response.blob());
+          updateTemplatePreview();
+        } catch (error) {
+          showNotice(error.message, true);
+        }
+      }
+      if (previewOnly) {
+        document.querySelector("#template-dialog-title").textContent = `${template.name} · Preview`;
+        form.querySelector('[type="submit"]').hidden = true;
+        form.querySelector("[data-close='template-dialog']").textContent = "Close preview";
+        form.querySelectorAll("input,select,textarea").forEach((input) => { input.disabled = true; });
+      }
+    }
+
+    function templateFormValues() {
+      return {
+        company_name: document.querySelector("#template-company").value,
+        name: document.querySelector("#template-name").value,
+        settings: {
+          company_email: document.querySelector("#template-email").value,
+          company_phone: document.querySelector("#template-phone").value,
+          company_address: document.querySelector("#template-address").value,
+          header_title: document.querySelector("#template-title").value,
+          header_text: document.querySelector("#template-header").value,
+          footer_text: document.querySelector("#template-footer").value,
+          primary_color: document.querySelector("#template-primary").value,
+          accent_color: document.querySelector("#template-accent").value,
+          font_family: document.querySelector("#template-font").value,
+          layout: document.querySelector("#template-layout").value,
+          terms: document.querySelector("#template-terms").value,
+          payment_details: document.querySelector("#template-payment").value,
+          signature_label: document.querySelector("#template-signature").value
+        },
+        is_active: document.querySelector("#template-active").checked,
+        is_default: document.querySelector("#template-default").checked
+      };
+    }
+
+    function updateTemplatePreview(logoURL = state.templateLogoURL || "") {
+      const values = templateFormValues();
+      const settings = values.settings;
+      const preview = document.querySelector("#template-live-preview");
+      preview.className = `template-paper ${settings.layout}`;
+      preview.style.setProperty("--paper-primary", settings.primary_color);
+      preview.style.setProperty("--paper-accent", settings.accent_color);
+      preview.style.setProperty("--paper-font", settings.font_family);
+      document.querySelector("#template-preview-layout").textContent = `A4 · ${settings.layout}`;
+      preview.innerHTML = `<div class="paper-header">${logoURL ? `<img class="paper-logo" src="${esc(logoURL)}" alt="Company logo">` : '<span class="paper-logo-placeholder">LOGO</span>'}<div class="paper-brand"><h3>${esc(values.company_name || "Your company")}</h3><span>${esc(settings.company_address || "Company address")}</span><span>${esc(settings.company_email || "email@company.com")}${settings.company_phone ? ` · ${esc(settings.company_phone)}` : ""}</span></div></div><div class="paper-title"><div><h2>${esc(settings.header_title || "Quotation")}</h2><p>${esc(settings.header_text || "Prepared for your consideration")}</p></div><span>QUOTE-0001<br>Issued today</span></div><div class="paper-customer"><small>PREPARED FOR</small><strong>Customer name</strong><span>customer@example.com</span></div><div class="paper-table"><div class="paper-table-head"><span>Description</span><span>Qty</span><span>Unit price</span><span>Total</span></div><div><span>Professional services</span><span>2</span><span>125.00</span><span>250.00</span></div><div><span>Setup and delivery</span><span>1</span><span>80.00</span><span>80.00</span></div></div><div class="paper-totals"><span>Subtotal</span><strong>330.00</strong><span>Tax</span><strong>0.00</strong><b>Grand total</b><b>330.00</b></div>${settings.payment_details ? `<div class="paper-section"><b>Payment details</b><span>${esc(settings.payment_details)}</span></div>` : ""}${settings.terms ? `<div class="paper-section"><b>Terms and conditions</b><span>${esc(settings.terms)}</span></div>` : ""}${settings.signature_label ? `<div class="paper-signature">${esc(settings.signature_label)}<i></i></div>` : ""}<div class="paper-footer">${esc(settings.footer_text || "Thank you for your business.")}</div>`;
+    }
+
+    for (const selector of ["#template-company", "#template-name", "#template-email", "#template-phone", "#template-address", "#template-title", "#template-header", "#template-footer", "#template-payment", "#template-terms", "#template-signature", "#template-primary", "#template-accent", "#template-font", "#template-layout"]) {
+      document.querySelector(selector).addEventListener("input", () => updateTemplatePreview());
+      document.querySelector(selector).addEventListener("change", () => updateTemplatePreview());
+    }
+
+    document.querySelector("#template-logo").addEventListener("change", (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      if (!["image/png", "image/jpeg"].includes(file.type) || file.size > 2 * 1024 * 1024) {
+        event.target.value = "";
+        showNotice("Choose a PNG or JPEG logo no larger than 2 MB.", true);
+        return;
+      }
+      state.templateLogoURL = URL.createObjectURL(file);
+      updateTemplatePreview();
+    });
+
+    document.querySelector("#template-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const id = form.dataset.id;
+      const file = document.querySelector("#template-logo").files[0];
+      const payload = templateFormValues();
+      if (payload.is_default && !payload.is_active) {
+        showNotice("A default template must be active.", true);
+        return;
+      }
+      try {
+        const result = await request(id ? `/templates/${id}` : "/templates", {
+          method: id ? "PUT" : "POST", body: JSON.stringify(payload)
+        });
+        const templateID = id || result.data.id;
+        if (file) {
+          const upload = new FormData();
+          upload.append("logo", file);
+          await request(`/templates/${templateID}/logo`, { method: "POST", body: upload });
+        }
+        document.querySelector("#template-dialog").close();
+        if (state.templateLogoURL) URL.revokeObjectURL(state.templateLogoURL);
+        state.templateLogoURL = null;
+        await loadTemplates();
+        showNotice(id ? "Template updated." : "Template created.");
+      } catch (error) { showNotice(error.message, true); }
+    });
+
+    async function previewTemplate(template) {
+      await openTemplateEditor(template, true);
+    }
+
+    function resetTemplateEditor() {
+      const form = document.querySelector("#template-form");
+      form.querySelectorAll("input,select,textarea").forEach((input) => { input.disabled = false; });
+      form.querySelector('[type="submit"]').hidden = false;
+      form.querySelector("[data-close='template-dialog']").textContent = "Cancel";
+      if (state.templateLogoURL) URL.revokeObjectURL(state.templateLogoURL);
+      state.templateLogoURL = null;
+    }
+
+    document.querySelector("#template-dialog").addEventListener("close", resetTemplateEditor);
 
     async function deleteCustomer(customer) {
       if (!confirm(`Delete ${customer.name}?`)) return;
@@ -390,6 +611,9 @@ const api = "/api/v1";
       for (const customer of state.customers) select.add(new Option(customer.name, customer.id));
       if (quotation) {
         select.value = quotation.customer_id;
+        if (quotation.template_id && state.templates.some((template) => template.id === quotation.template_id && template.is_active)) {
+          document.querySelector("#quote-template").value = quotation.template_id;
+        }
         document.querySelector("#quote-tax").value = quotation.tax_rate;
         document.querySelector("#quote-notes").value = quotation.notes || "";
         document.querySelector("#quote-valid").value = quotation.valid_until ? quotation.valid_until.slice(0, 10) : "";
@@ -475,6 +699,7 @@ const api = "/api/v1";
       const valid = document.querySelector("#quote-valid").value;
       const payload = {
         customer_id: Number(document.querySelector("#quote-customer").value),
+        template_id: Number(document.querySelector("#quote-template").value),
         tax_rate: Number(document.querySelector("#quote-tax").value),
         notes: document.querySelector("#quote-notes").value,
         valid_until: valid ? `${valid}T00:00:00Z` : null,
@@ -494,13 +719,29 @@ const api = "/api/v1";
         const result = await request(`/quotations/${id}`);
         const quote = result.data;
         state.previewID = id;
+        const snapshot = quote.template_snapshot || {};
+        const templateSettings = snapshot.settings || {};
+        if (state.quotationPreviewLogoURL) URL.revokeObjectURL(state.quotationPreviewLogoURL);
+        state.quotationPreviewLogoURL = null;
+        if (snapshot.logo_url) {
+          const logoResponse = await fetch(snapshot.logo_url, {
+            headers: { Authorization: `Bearer ${sessionStorage.getItem(tokenKey)}` }
+          });
+          if (!logoResponse.ok) throw new Error("Unable to load the quotation template logo");
+          state.quotationPreviewLogoURL = URL.createObjectURL(await logoResponse.blob());
+        }
         const items = quote.items.map((item) => `<tr><td>${esc(item.description)}</td><td style="text-align:right">${money.format(item.quantity)}</td><td style="text-align:right">${money.format(item.unit_price)}</td><td style="text-align:right">${money.format(item.line_total)}</td></tr>`).join("");
         document.querySelector("#preview-content").innerHTML = `<article class="preview">
-          <div class="preview-brand"><div><h2>QUOTATION</h2><p>Prepared for your consideration</p></div><div class="preview-number"><strong>${esc(quote.number)}</strong><br><br>Issued ${date(quote.created_at)}<br>Valid until ${date(quote.valid_until)}</div></div>
+          ${state.quotationPreviewLogoURL ? `<img class="quotation-preview-logo" src="${esc(state.quotationPreviewLogoURL)}" alt="Company logo">` : ""}
+          <div class="preview-brand" style="--preview-primary:${esc(templateSettings.primary_color || "#3c5fc9")};--preview-accent:${esc(templateSettings.accent_color || "#d6a94b")};font-family:${esc(templateSettings.font_family || "Arial")}"><div><h2>${esc(templateSettings.header_title || "QUOTATION")}</h2><p>${esc(snapshot.company_name || "Prepared for your consideration")}</p>${templateSettings.company_address ? `<p>${esc(templateSettings.company_address)}</p>` : ""}${templateSettings.company_email || templateSettings.company_phone ? `<p>${esc([templateSettings.company_email, templateSettings.company_phone].filter(Boolean).join(" · "))}</p>` : ""}${templateSettings.header_text ? `<p>${esc(templateSettings.header_text)}</p>` : ""}</div><div class="preview-number"><strong>${esc(quote.number)}</strong><br><br>Issued ${date(quote.created_at)}<br>Valid until ${date(quote.valid_until)}</div></div>
           <div class="preview-customer"><small>Prepared for</small><strong>${esc(quote.customer?.name || "")}</strong><p>${esc(quote.customer?.email || "")}${quote.customer?.phone ? ` · ${esc(quote.customer.phone)}` : ""}${quote.customer?.address ? `\n${esc(quote.customer.address)}` : ""}</p></div>
           <div class="table-wrap preview-table"><table><thead><tr><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit price</th><th style="text-align:right">Total</th></tr></thead><tbody>${items}</tbody></table></div>
           <div class="totals preview-totals"><div class="total-row"><span>Subtotal</span><span>${money.format(quote.subtotal)}</span></div><div class="total-row"><span>Tax (${money.format(quote.tax_rate)}%)</span><span>${money.format(quote.tax_amount)}</span></div><div class="total-row final"><span>Grand total</span><span>${money.format(quote.grand_total)}</span></div></div>
           ${quote.notes ? `<div class="preview-notes"><strong>Notes</strong><br><br>${esc(quote.notes)}</div>` : ""}
+          ${templateSettings.payment_details ? `<div class="preview-notes"><strong>Payment details</strong><br><br>${esc(templateSettings.payment_details)}</div>` : ""}
+          ${templateSettings.terms ? `<div class="preview-notes"><strong>Terms and conditions</strong><br><br>${esc(templateSettings.terms)}</div>` : ""}
+          ${templateSettings.signature_label ? `<div class="preview-signature">${esc(templateSettings.signature_label)}</div>` : ""}
+          ${templateSettings.footer_text ? `<div class="quotation-preview-footer">${esc(templateSettings.footer_text)}</div>` : ""}
         </article>`;
         const approvalActions = document.querySelector("#preview-approval-actions");
         approvalActions.replaceChildren();
@@ -523,6 +764,10 @@ const api = "/api/v1";
     }
 
     document.querySelector("#preview-print").addEventListener("click", () => window.print());
+    document.querySelector("#preview-dialog").addEventListener("close", () => {
+      if (state.quotationPreviewLogoURL) URL.revokeObjectURL(state.quotationPreviewLogoURL);
+      state.quotationPreviewLogoURL = null;
+    });
     document.querySelector("#preview-pdf").addEventListener("click", async () => {
       try {
         const response = await fetch(`${api}/quotations/${state.previewID}/pdf`, { headers: { Authorization: `Bearer ${sessionStorage.getItem(tokenKey)}` } });

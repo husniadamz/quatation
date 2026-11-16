@@ -89,6 +89,7 @@ func (r *quotationRepository) Update(ctx context.Context, quotation *models.Quot
 			"customer_id": quotation.CustomerID, "subtotal": quotation.Subtotal, "tax_rate": quotation.TaxRate,
 			"tax_amount": quotation.TaxAmount, "grand_total": quotation.GrandTotal,
 			"notes": quotation.Notes, "valid_until": quotation.ValidUntil,
+			"template_id": quotation.TemplateID, "template_snapshot": quotation.TemplateSnapshot,
 		})
 		if result.Error != nil {
 			return result.Error

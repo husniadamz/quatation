@@ -11,6 +11,7 @@ import (
 
 func New(customers *controllers.CustomerController, quotations *controllers.QuotationController,
 	auth *controllers.AuthController, dashboard *controllers.DashboardController,
+	templates *controllers.QuotationTemplateController,
 	authService services.AuthService) (*gin.Engine, error) {
 	router := gin.New()
 	router.Use(gin.Logger(), gin.Recovery())
@@ -28,6 +29,21 @@ func New(customers *controllers.CustomerController, quotations *controllers.Quot
 	protected.GET("/auth/me", auth.Me)
 	protected.POST("/auth/logout", auth.Logout)
 	protected.GET("/dashboard", middleware.RequirePermission(middleware.ResourceDashboard, middleware.ActionRead), dashboard.Get)
+	templateRoutes := protected.Group("/templates", middleware.RequirePermission(middleware.ResourceTemplates, middleware.ActionRead))
+	{
+		templateRoutes.GET("", templates.List)
+		templateRoutes.GET("/:id", templates.Get)
+	}
+	protected.GET("/template-logos/:filename", templates.LogoAsset)
+	adminTemplateRoutes := protected.Group("/templates", middleware.RequirePermission(middleware.ResourceTemplates, middleware.ActionWrite))
+	{
+		adminTemplateRoutes.POST("", templates.Create)
+		adminTemplateRoutes.PUT("/:id", templates.Update)
+		adminTemplateRoutes.POST("/:id/logo", templates.UploadLogo)
+		adminTemplateRoutes.PATCH("/:id/active", templates.SetActive)
+		adminTemplateRoutes.PATCH("/:id/default", templates.SetDefault)
+		adminTemplateRoutes.DELETE("/:id", templates.Delete)
+	}
 	customerRoutes := protected.Group("/customers", middleware.RequirePermission(middleware.ResourceCustomers, middleware.ActionRead))
 	{
 		customerRoutes.GET("", customers.List)

@@ -12,6 +12,7 @@ const (
 	ResourceDashboard  = "dashboard"
 	ResourceCustomers  = "customers"
 	ResourceQuotations = "quotations"
+	ResourceTemplates  = "templates"
 	ResourceUsers      = "users"
 
 	ActionRead    = "read"
@@ -48,6 +49,8 @@ func CanAccess(role, resource, action string) bool {
 		return true
 	case role == models.RoleSalesExecutive && resource == ResourceQuotations &&
 		(action == ActionRead || action == ActionWrite):
+		return true
+	case role == models.RoleSalesExecutive && resource == ResourceTemplates && action == ActionRead:
 		return true
 	case role == models.RoleManager && resource == ResourceDashboard && action == ActionRead:
 		return true
