@@ -14,6 +14,7 @@ const (
 	ResourceQuotations = "quotations"
 	ResourceTemplates  = "templates"
 	ResourceUsers      = "users"
+	ResourceCompanies  = "companies"
 
 	ActionRead    = "read"
 	ActionWrite   = "write"

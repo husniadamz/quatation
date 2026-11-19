@@ -2,7 +2,7 @@ const api = "/api/v1";
     const tokenKey = "quotely-session";
     const statuses = ["draft", "sent", "accepted", "rejected", "expired"];
     const money = new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const state = { user: null, customers: [], templates: [], quotePage: 1, customerPage: 1, quoteSearch: "", customerSearch: "", quoteStatus: "", previewID: null, templatePreviewURL: null, quotationPreviewLogoURL: null };
+    const state = { user: null, customers: [], templates: [], companies: [], templateSearch: "", templateStatus: "", quotePage: 1, customerPage: 1, quoteSearch: "", customerSearch: "", quoteStatus: "", previewID: null, templatePreviewURL: null, quotationPreviewLogoURL: null };
     const authForm = document.querySelector("#auth-form");
     const authFields = document.querySelector("#auth-fields");
     const authError = document.querySelector("#auth-error");
@@ -78,6 +78,10 @@ const api = "/api/v1";
       return currentRole() === "admin";
     }
 
+    function canViewTemplates() {
+      return currentRole() === "admin" || currentRole() === "sales_executive";
+    }
+
     function showAuth(setup) {
       document.querySelector("#app").hidden = true;
       document.querySelector("#auth-screen").hidden = false;
@@ -132,7 +136,9 @@ const api = "/api/v1";
       document.querySelector("#profile-role").textContent = roleName(state.user.role);
       document.querySelector("#profile-avatar").textContent = initials(state.user.name);
       document.querySelector("#users-nav").hidden = role !== "admin";
-      document.querySelector("#templates-nav").hidden = !canManageTemplates();
+      document.querySelector("#companies-nav").hidden = role !== "admin";
+      document.querySelector("#templates-nav").hidden = !canViewTemplates();
+      document.querySelector("#add-template").hidden = !canManageTemplates();
       document.querySelector("#customers-nav").hidden = !canManageCustomers();
       document.querySelector("#customer-quick-card").hidden = !canManageCustomers();
       document.querySelector("#dashboard-new-quotation").hidden = role === "manager";
@@ -141,7 +147,8 @@ const api = "/api/v1";
       document.querySelector("#quotation-status-heading").textContent = role === "manager" ? "Approval" : "Status";
       document.querySelector("#today").textContent = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date());
       const tasks = [loadDashboard(), loadQuotations()];
-      if (role === "admin" || role === "sales_executive") tasks.push(loadTemplates());
+      if (role === "admin") tasks.push(loadCompanies());
+      if (canViewTemplates()) tasks.push(loadTemplates());
       if (canManageCustomers()) tasks.push(loadCustomers());
       await Promise.all(tasks);
     }
@@ -178,16 +185,17 @@ const api = "/api/v1";
     });
 
     function navigate(page) {
-      if (page === "users" && currentRole() !== "admin") return;
-      if (page === "templates" && !canManageTemplates()) return;
+      if ((page === "users" || page === "companies") && currentRole() !== "admin") return;
+      if (page === "templates" && !canViewTemplates()) return;
       if (page === "customers" && !canManageCustomers()) return;
       document.querySelectorAll(".page").forEach((section) => section.classList.toggle("active", section.id === `page-${page}`));
       document.querySelectorAll(".nav [data-page]").forEach((button) => button.classList.toggle("active", button.dataset.page === page));
-      document.querySelector("#topbar-title").textContent = ({ dashboard: "Dashboard", customers: "Customers", quotations: "Quotations", users: "Team members", templates: "Quotation templates" })[page];
+      document.querySelector("#topbar-title").textContent = ({ dashboard: "Dashboard", customers: "Customers", quotations: "Quotations", users: "Team members", companies: "Companies", templates: "Quotation templates" })[page];
       if (page === "dashboard") loadDashboard().catch((error) => showNotice(error.message, true));
       if (page === "customers") loadCustomers().catch((error) => showNotice(error.message, true));
       if (page === "quotations") loadQuotations().catch((error) => showNotice(error.message, true));
       if (page === "users") loadUsers().catch((error) => showNotice(error.message, true));
+      if (page === "companies") loadCompanies().catch((error) => showNotice(error.message, true));
       if (page === "templates") loadTemplates().catch((error) => showNotice(error.message, true));
     }
 
@@ -275,27 +283,58 @@ const api = "/api/v1";
           state.templates.find((template) => template.is_active);
         if (defaultTemplate) select.value = defaultTemplate.id;
       }
-      if (canManageTemplates()) renderTemplates();
+      if (canViewTemplates()) renderTemplates();
     }
 
     function renderTemplates() {
-      const grid = document.querySelector("#template-grid");
-      grid.replaceChildren();
-      for (const template of state.templates) {
-        const card = document.createElement("article");
-        card.className = "template-card";
-        const swatch = esc(template.settings.primary_color || "#264a73");
-        const accent = esc(template.settings.accent_color || "#d6a94b");
-        card.innerHTML = `<div class="template-card-top"><span class="template-mark" style="--template-color:${swatch};--template-accent:${accent}">Q</span><div class="template-card-badges">${template.is_default ? '<span class="template-tag default">Default</span>' : ""}<span class="template-tag ${template.is_active ? "active" : "inactive"}">${template.is_active ? "Active" : "Inactive"}</span></div></div><h3>${esc(template.name)}</h3><p>${esc(template.company_name)}</p><div class="template-card-detail">${esc(template.settings.font_family || "Arial")} · ${esc(template.settings.layout || "portrait")}</div><div class="template-card-actions"><button class="text-button" data-preview>Preview</button><button class="text-button" data-edit>Edit</button><button class="text-button" data-toggle>${template.is_active ? "Deactivate" : "Activate"}</button>${template.is_default ? "" : '<button class="text-button" data-default>Set default</button>'}<button class="text-button delete" data-delete>Delete</button></div>`;
-        card.querySelector("[data-preview]").addEventListener("click", () => previewTemplate(template));
-        card.querySelector("[data-edit]").addEventListener("click", () => openTemplateEditor(template));
-        card.querySelector("[data-toggle]").addEventListener("click", () => setTemplateActive(template, !template.is_active));
-        card.querySelector("[data-default]")?.addEventListener("click", () => setTemplateDefault(template));
-        card.querySelector("[data-delete]").addEventListener("click", () => deleteTemplate(template));
-        grid.append(card);
+      const rows = document.querySelector("#template-rows");
+      rows.replaceChildren();
+      const search = state.templateSearch.toLocaleLowerCase();
+      const templates = state.templates.filter((template) => {
+        const matchesSearch = `${template.name} ${template.company_name}`.toLocaleLowerCase().includes(search);
+        const matchesStatus = !state.templateStatus || (state.templateStatus === "active") === template.is_active;
+        return matchesSearch && matchesStatus;
+      });
+      for (const template of templates) {
+        const row = document.createElement("tr");
+        row.innerHTML = `<td><div class="template-name-cell"><span class="template-file-icon" aria-hidden="true">▤</span><span><strong>${esc(template.name)}</strong><small>${template.is_default ? "Default" : ""}</small></span></div></td><td><span class="template-status ${template.is_active ? "published" : "draft"}">${template.is_active ? "Published" : "Draft"}</span></td><td>${esc(template.company_name)}</td><td>—</td><td>${date(template.created_at)}</td><td>${canManageTemplates() ? `<details class="template-actions"><summary aria-label="Actions for ${esc(template.name)}">⋮</summary><div class="template-action-menu"><button type="button" data-preview>Preview</button><button type="button" data-edit>Edit</button>${template.is_active ? "" : '<button type="button" data-toggle>Publish</button>'}${template.is_default ? "" : '<button type="button" data-default>Set as default</button>'}<button type="button" class="delete" data-delete>Delete</button></div></details>` : '<button type="button" class="text-button" data-preview>Preview</button>'}</td>`;
+        const actions = row.querySelector(".template-actions");
+        const menu = row.querySelector(".template-action-menu");
+        actions?.addEventListener("toggle", () => {
+          if (actions.open) {
+            const anchor = actions.querySelector("summary").getBoundingClientRect();
+            document.body.append(menu);
+            menu.style.left = `${Math.max(8, Math.min(anchor.right - menu.offsetWidth, innerWidth - menu.offsetWidth - 8))}px`;
+            menu.style.top = `${Math.max(8, Math.min(anchor.bottom + 5, innerHeight - menu.offsetHeight - 8))}px`;
+          } else if (menu.parentElement === document.body) {
+            actions.append(menu);
+            menu.style.removeProperty("left");
+            menu.style.removeProperty("top");
+          }
+        });
+        row.querySelector("[data-preview]").addEventListener("click", () => { if (actions) actions.open = false; previewTemplate(template); });
+        row.querySelector("[data-edit]")?.addEventListener("click", () => { actions.open = false; openTemplateEditor(template); });
+        row.querySelector("[data-toggle]")?.addEventListener("click", () => { actions.open = false; setTemplateActive(template, true); });
+        row.querySelector("[data-default]")?.addEventListener("click", () => { actions.open = false; setTemplateDefault(template); });
+        row.querySelector("[data-delete]")?.addEventListener("click", () => { actions.open = false; deleteTemplate(template); });
+        rows.append(row);
       }
-      document.querySelector("#template-empty").hidden = state.templates.length > 0;
+      const empty = document.querySelector("#template-empty");
+      empty.textContent = state.templates.length
+        ? "No templates match your search or status filter."
+        : "No templates yet. Create your first quotation template.";
+      empty.hidden = templates.length > 0;
+      document.querySelector(".template-table").hidden = templates.length === 0;
     }
+
+    document.querySelector("#template-search").addEventListener("input", (event) => {
+      state.templateSearch = event.target.value.trim();
+      renderTemplates();
+    });
+    document.querySelector("#template-status-filter").addEventListener("change", (event) => {
+      state.templateStatus = event.target.value;
+      renderTemplates();
+    });
 
     async function setTemplateActive(template, active) {
       try {
@@ -328,6 +367,14 @@ const api = "/api/v1";
       const form = document.querySelector("#template-form");
       form.reset();
       form.dataset.id = template?.id || "";
+      const companySelect = document.querySelector("#template-company");
+      companySelect.replaceChildren(new Option("Choose a company", ""));
+      for (const company of state.companies) companySelect.add(new Option(company.name, company.id));
+      if (template && !state.companies.some((company) => company.id === template.company_id)) {
+        companySelect.add(new Option(template.company_name, template.company_id));
+      }
+      companySelect.value = template?.company_id || "";
+      companySelect.disabled = !canManageTemplates();
       document.querySelector("#template-dialog-title").textContent = template ? "Edit quotation template" : "New quotation template";
       form.querySelector('[type="submit"]').textContent = template ? "Save changes" : "Save template";
       document.querySelector("#template-active").checked = template?.is_active ?? true;
@@ -338,16 +385,14 @@ const api = "/api/v1";
       document.querySelector("#template-font").value = template?.settings.font_family || "Arial";
       document.querySelector("#template-layout").value = template?.settings.layout || "portrait";
       for (const [field, key] of [
-        ["template-company", "company_name"], ["template-name", "name"],
+        ["template-name", "name"],
         ["template-email", "company_email"], ["template-phone", "company_phone"],
         ["template-address", "company_address"], ["template-header", "header_text"],
         ["template-footer", "footer_text"], ["template-payment", "payment_details"],
         ["template-terms", "terms"], ["template-signature", "signature_label"]
       ]) {
         const setting = template?.settings?.[key];
-        document.querySelector(`#${field}`).value = field === "template-company" || field === "template-name"
-          ? template?.[key] || ""
-          : setting || "";
+        document.querySelector(`#${field}`).value = field === "template-name" ? template?.[key] || "" : setting || "";
       }
       document.querySelector("#template-logo").value = "";
       if (state.templateLogoURL) URL.revokeObjectURL(state.templateLogoURL);
@@ -369,14 +414,19 @@ const api = "/api/v1";
       if (previewOnly) {
         document.querySelector("#template-dialog-title").textContent = `${template.name} · Preview`;
         form.querySelector('[type="submit"]').hidden = true;
-        form.querySelector("[data-close='template-dialog']").textContent = "Close preview";
+        const headerClose = form.querySelector(".dialog-head [data-close='template-dialog']");
+        headerClose.setAttribute("aria-label", "Close preview");
+        headerClose.title = "Close preview";
+        form.querySelector(".dialog-foot [data-close='template-dialog']").textContent = "Close preview";
         form.querySelectorAll("input,select,textarea").forEach((input) => { input.disabled = true; });
       }
     }
 
     function templateFormValues() {
+      const companySelect = document.querySelector("#template-company");
       return {
-        company_name: document.querySelector("#template-company").value,
+        company_id: Number(companySelect.value),
+        company_name: companySelect.selectedOptions[0]?.textContent || "",
         name: document.querySelector("#template-name").value,
         settings: {
           company_email: document.querySelector("#template-email").value,
@@ -433,6 +483,10 @@ const api = "/api/v1";
       const id = form.dataset.id;
       const file = document.querySelector("#template-logo").files[0];
       const payload = templateFormValues();
+      if (!payload.company_id) {
+        showNotice("Choose a registered company for this template.", true);
+        return;
+      }
       if (payload.is_default && !payload.is_active) {
         showNotice("A default template must be active.", true);
         return;
@@ -463,7 +517,10 @@ const api = "/api/v1";
       const form = document.querySelector("#template-form");
       form.querySelectorAll("input,select,textarea").forEach((input) => { input.disabled = false; });
       form.querySelector('[type="submit"]').hidden = false;
-      form.querySelector("[data-close='template-dialog']").textContent = "Cancel";
+      const headerClose = form.querySelector(".dialog-head [data-close='template-dialog']");
+      headerClose.setAttribute("aria-label", "Close");
+      headerClose.removeAttribute("title");
+      form.querySelector(".dialog-foot [data-close='template-dialog']").textContent = "Cancel";
       if (state.templateLogoURL) URL.revokeObjectURL(state.templateLogoURL);
       state.templateLogoURL = null;
     }
@@ -786,19 +843,49 @@ const api = "/api/v1";
     });
 
     document.querySelector("#add-user").addEventListener("click", () => {
-      document.querySelector("#user-form").reset();
-      document.querySelector("#user-dialog").showModal();
+      if (!state.companies.length) {
+        showNotice("Register a company before inviting a team member.", true);
+        navigate("companies");
+        return;
+      }
+      openUserEditor();
     });
     document.querySelector("#user-form").addEventListener("submit", async (event) => {
       event.preventDefault();
-      const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+      const form = event.currentTarget;
+      const id = form.dataset.id;
+      const payload = Object.fromEntries(new FormData(form).entries());
+      payload.company_id = Number(payload.company_id);
+      if (id) delete payload.password;
       try {
-        await request("/users", { method: "POST", body: JSON.stringify(payload) });
+        await request(id ? `/users/${id}` : "/users", {
+          method: id ? "PUT" : "POST", body: JSON.stringify(payload)
+        });
         document.querySelector("#user-dialog").close();
         await loadUsers();
-        showNotice("Team member created.");
+        showNotice(id ? "Team member updated." : "Team member created.");
       } catch (error) { showNotice(error.message, true); }
     });
+
+    function openUserEditor(user = null) {
+      const form = document.querySelector("#user-form");
+      form.reset();
+      form.dataset.id = user?.id || "";
+      document.querySelector("#user-dialog-title").textContent = user ? "Edit team member" : "Invite team member";
+      document.querySelector("#user-submit").textContent = user ? "Save changes" : "Create account";
+      document.querySelector("#user-password-field").hidden = Boolean(user);
+      document.querySelector("#user-password").required = !user;
+      const companySelect = document.querySelector("#user-company");
+      companySelect.replaceChildren(new Option("Choose a company", ""));
+      for (const company of state.companies) companySelect.add(new Option(company.name, company.id));
+      if (user) {
+        document.querySelector("#user-name").value = user.name;
+        document.querySelector("#user-email").value = user.email;
+        document.querySelector("#user-company").value = user.company_id || "";
+        document.querySelector("#user-role").value = user.role === "user" ? "sales_executive" : user.role;
+      }
+      document.querySelector("#user-dialog").showModal();
+    }
 
     async function loadUsers() {
       if (currentRole() !== "admin") return;
@@ -807,10 +894,14 @@ const api = "/api/v1";
       rows.replaceChildren();
       for (const user of result.data) {
         const row = document.createElement("tr");
-        row.innerHTML = `<td><strong>${esc(user.name)}</strong></td><td>${esc(user.email)}</td><td>${esc(roleName(user.role))}</td><td>${date(user.created_at)}</td>`;
+        row.innerHTML = `<td><strong>${esc(user.name)}</strong></td><td>${esc(user.email)}</td><td>${esc(user.company?.name || "—")}</td><td>${esc(roleName(user.role))}</td><td>${date(user.created_at)}</td>`;
         const action = document.createElement("td");
         if (user.id === state.user.id) action.textContent = "You";
         else {
+          const edit = document.createElement("button");
+          edit.className = "text-button";
+          edit.textContent = "Edit";
+          edit.addEventListener("click", () => openUserEditor(user));
           const remove = document.createElement("button");
           remove.className = "text-button delete"; remove.textContent = "Remove";
           remove.addEventListener("click", async () => {
@@ -818,12 +909,91 @@ const api = "/api/v1";
             try { await request(`/users/${user.id}`, { method: "DELETE" }); await loadUsers(); showNotice("Team member removed."); }
             catch (error) { showNotice(error.message, true); }
           });
-          action.append(remove);
+          action.append(edit, remove);
         }
         row.append(action);
         rows.append(row);
       }
       document.querySelector("#user-empty").hidden = result.data.length > 0;
+    }
+
+    document.querySelector("#add-company").addEventListener("click", () => openCompanyEditor());
+    document.querySelector("#company-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const id = form.dataset.id;
+      const payload = Object.fromEntries(new FormData(form).entries());
+      try {
+        await request(id ? `/companies/${id}` : "/companies", {
+          method: id ? "PUT" : "POST", body: JSON.stringify(payload)
+        });
+        document.querySelector("#company-dialog").close();
+        await loadCompanies();
+        showNotice(id ? "Company updated." : "Company registered.");
+      } catch (error) { showNotice(error.message, true); }
+    });
+
+    function openCompanyEditor(company = null) {
+      const form = document.querySelector("#company-form");
+      form.reset();
+      form.dataset.id = company?.id || "";
+      document.querySelector("#company-dialog-title").textContent = company ? "Update company" : "Register company";
+      for (const key of ["name", "email", "phone", "address"]) {
+        document.querySelector(`#company-${key}`).value = company?.[key] || "";
+      }
+      document.querySelector("#company-dialog").showModal();
+    }
+
+    async function loadCompanies() {
+      if (currentRole() !== "admin") return;
+      const result = await request("/companies");
+      state.companies = result.data;
+      const rows = document.querySelector("#company-rows");
+      rows.replaceChildren();
+      for (const company of state.companies) {
+        const row = document.createElement("tr");
+        row.innerHTML = `<td><strong>${esc(company.name)}</strong></td><td>${esc(company.email || "—")}</td><td>${esc(company.phone || "—")}</td><td>${esc(company.address || "—")}</td>`;
+        const actions = document.createElement("td");
+        const members = document.createElement("button");
+        members.className = "text-button";
+        members.textContent = "Members";
+        members.addEventListener("click", () => openCompanyMembers(company));
+        const edit = document.createElement("button");
+        edit.className = "text-button";
+        edit.textContent = "Edit";
+        edit.addEventListener("click", () => openCompanyEditor(company));
+        const remove = document.createElement("button");
+        remove.className = "text-button delete";
+        remove.textContent = "Delete";
+        remove.addEventListener("click", async () => {
+          if (!confirm(`Delete ${company.name}? Companies assigned to team members cannot be deleted.`)) return;
+          try {
+            await request(`/companies/${company.id}`, { method: "DELETE" });
+            await loadCompanies();
+            showNotice("Company deleted.");
+          } catch (error) { showNotice(error.message, true); }
+        });
+        actions.append(members, edit, remove);
+        row.append(actions);
+        rows.append(row);
+      }
+      document.querySelector("#company-empty").hidden = state.companies.length > 0;
+    }
+
+    async function openCompanyMembers(company) {
+      try {
+        const result = await request(`/companies/${company.id}/users`);
+        const rows = document.querySelector("#company-member-rows");
+        rows.replaceChildren();
+        for (const user of result.data) {
+          const row = document.createElement("tr");
+          row.innerHTML = `<td><strong>${esc(user.name)}</strong></td><td>${esc(user.email)}</td><td>${esc(roleName(user.role))}</td><td>${date(user.created_at)}</td>`;
+          rows.append(row);
+        }
+        document.querySelector("#company-members-title").textContent = `${company.name} · Members`;
+        document.querySelector("#company-members-empty").hidden = result.data.length > 0;
+        document.querySelector("#company-members-dialog").showModal();
+      } catch (error) { showNotice(error.message, true); }
     }
 
     initialize().catch((error) => { showAuth(false); authError.textContent = error.message; });

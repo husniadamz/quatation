@@ -20,6 +20,7 @@ type QuotationTemplateSettings struct {
 
 type QuotationTemplate struct {
 	ID               uint                      `json:"id" gorm:"primaryKey"`
+	CompanyID        uint                      `json:"company_id" gorm:"not null;default:0;index"`
 	CompanyName      string                    `json:"company_name" gorm:"size:180;not null;uniqueIndex:idx_template_company_name"`
 	Name             string                    `json:"name" gorm:"size:120;not null;uniqueIndex:idx_template_company_name"`
 	Settings         QuotationTemplateSettings `json:"settings" gorm:"type:json;serializer:json;not null"`

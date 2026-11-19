@@ -22,7 +22,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("connect to database: %v", err)
 	}
-	if err := db.AutoMigrate(&models.Customer{}, &models.Quotation{}, &models.QuotationItem{},
+	if err := db.AutoMigrate(&models.Customer{}, &models.Quotation{}, &models.QuotationItem{}, &models.Company{},
 		&models.User{}, &models.AuthSession{}, &models.InstallState{}, &models.QuotationTemplate{}); err != nil {
 		log.Fatalf("migrate database: %v", err)
 	}
@@ -34,18 +34,21 @@ func main() {
 		log.Fatalf("ensure starter quotation template: %v", err)
 	}
 	authRepo := repositories.NewAuthRepository(db)
+	companyRepo := repositories.NewCompanyRepository(db)
+	companyService := services.NewCompanyService(companyRepo)
 	customerService := services.NewCustomerService(customerRepo)
 	templateService := services.NewQuotationTemplateService(templateRepo, "data/template-logos")
 	quotationService := services.NewQuotationService(quotationRepo, customerRepo, templateRepo)
 	authService := services.NewAuthService(authRepo)
 	customerController := controllers.NewCustomerController(customerService)
 	quotationController := controllers.NewQuotationController(quotationService)
-	templateController := controllers.NewQuotationTemplateController(templateService)
+	templateController := controllers.NewQuotationTemplateController(templateService, companyService)
 	authController := controllers.NewAuthController(authService)
+	companyController := controllers.NewCompanyController(companyService)
 	dashboardController := controllers.NewDashboardController(quotationService, customerService)
 
 	router, err := routes.New(customerController, quotationController, authController, dashboardController,
-		templateController, authService)
+		templateController, authService, companyController)
 	if err != nil {
 		log.Fatalf("configure router: %v", err)
 	}

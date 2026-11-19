@@ -29,6 +29,7 @@
         <button data-page="customers" id="customers-nav"><span class="nav-icon">♙</span><span class="nav-text">Customers</span></button>
         <button data-page="templates" id="templates-nav" hidden><span class="nav-icon">▧</span><span class="nav-text">Quote templates</span></button>
         <button data-page="users" id="users-nav" hidden><span class="nav-icon">⚙</span><span class="nav-text">Team members</span></button>
+        <button data-page="companies" id="companies-nav" hidden><span class="nav-icon">▦</span><span class="nav-text">Companies</span></button>
       </nav>
       <div class="sidebar-bottom">
         <div class="profile">
@@ -94,17 +95,43 @@
         <section id="page-users" class="page">
           <div class="page-heading"><div><h2>Team members</h2><p>Manage access to your quotation workspace.</p></div><button id="add-user" class="button">＋ &nbsp;Invite team member</button></div>
           <section class="panel table-panel">
-            <div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Joined</th><th>Actions</th></tr></thead><tbody id="user-rows"></tbody></table><div id="user-empty" class="empty" hidden>No team members yet.</div></div>
+            <div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Company</th><th>Role</th><th>Joined</th><th>Actions</th></tr></thead><tbody id="user-rows"></tbody></table><div id="user-empty" class="empty" hidden>No team members yet.</div></div>
+          </section>
+        </section>
+
+        <section id="page-companies" class="page">
+          <div class="page-heading"><div><h2>Companies</h2><p>Register companies and assign team members to them.</p></div><button id="add-company" class="button">＋ &nbsp;Register company</button></div>
+          <section class="panel table-panel">
+            <div class="table-wrap"><table><thead><tr><th>Company</th><th>Email</th><th>Phone</th><th>Address</th><th>Actions</th></tr></thead><tbody id="company-rows"></tbody></table><div id="company-empty" class="empty" hidden>No companies registered yet. Register your first company.</div></div>
           </section>
         </section>
 
         <section id="page-templates" class="page">
-          <div class="page-heading">
-            <div><h2>Quotation templates</h2><p>Design branded quotation layouts for each company.</p></div>
-            <button id="add-template" class="button">＋ &nbsp;New template</button>
+          <div class="template-page-heading">
+            <h2>Templates</h2>
+            <button id="add-template" class="button">＋ &nbsp;Create new</button>
           </div>
-          <div id="template-grid" class="template-grid"></div>
-          <div id="template-empty" class="panel empty" hidden>No templates yet. Create a branded template for your company.</div>
+          <div class="template-tab">Your Templates</div>
+          <div class="template-filters">
+            <input id="template-search" class="search" type="search" placeholder="Search Templates" aria-label="Search templates">
+            <div class="template-status-filter">
+              <label for="template-status-filter">Status</label>
+              <select id="template-status-filter" class="filter" aria-label="Filter templates by status">
+                <option value="">All</option>
+                <option value="active">Published</option>
+                <option value="inactive">Draft</option>
+              </select>
+            </div>
+          </div>
+          <section class="panel table-panel template-table-panel">
+            <div class="table-wrap">
+              <table class="template-table">
+                <thead><tr><th>Template</th><th>Status</th><th>Company</th><th>Created By</th><th>Created On</th><th>Actions</th></tr></thead>
+                <tbody id="template-rows"></tbody>
+              </table>
+              <div id="template-empty" class="empty" hidden>No templates yet. Create your first quotation template.</div>
+            </div>
+          </section>
         </section>
       </main>
     </div>
@@ -153,7 +180,7 @@
       <div class="template-editor">
         <div class="template-fields">
           <div class="form-grid">
-            <div class="field"><label for="template-company">Company name</label><input id="template-company" name="company_name" maxlength="180" required></div>
+            <div class="field"><label for="template-company">Company</label><select id="template-company" required></select></div>
             <div class="field"><label for="template-name">Template name</label><input id="template-name" name="name" maxlength="120" required></div>
             <div class="field"><label for="template-email">Company email</label><input id="template-email" type="email" maxlength="255"></div>
             <div class="field"><label for="template-phone">Company phone</label><input id="template-phone" maxlength="60"></div>
@@ -189,15 +216,40 @@
 
   <dialog id="user-dialog">
     <form id="user-form">
-      <div class="dialog-head"><h3>Invite team member</h3><button class="close" type="button" data-close="user-dialog" aria-label="Close">×</button></div>
+      <div class="dialog-head"><h3 id="user-dialog-title">Invite team member</h3><button class="close" type="button" data-close="user-dialog" aria-label="Close">×</button></div>
       <div class="dialog-body">
         <div class="field"><label for="user-name">Full name</label><input id="user-name" name="name" maxlength="150" required></div>
         <div class="field"><label for="user-email">Email address</label><input id="user-email" name="email" type="email" maxlength="255" required></div>
-        <div class="field"><label for="user-password">Temporary password (at least 10 characters)</label><input id="user-password" name="password" type="password" minlength="10" maxlength="72" required></div>
+        <div id="user-password-field" class="field"><label for="user-password">Temporary password (at least 10 characters)</label><input id="user-password" name="password" type="password" minlength="10" maxlength="72" required></div>
+        <div class="field"><label for="user-company">Company</label><select id="user-company" name="company_id" required></select></div>
         <div class="field"><label for="user-role">Role</label><select id="user-role" name="role"><option value="sales_executive">Sales Executive</option><option value="manager">Manager</option><option value="admin">Administrator</option></select></div>
       </div>
-      <div class="dialog-foot"><button class="button secondary" type="button" data-close="user-dialog">Cancel</button><button class="button" type="submit">Create account</button></div>
+      <div class="dialog-foot"><button class="button secondary" type="button" data-close="user-dialog">Cancel</button><button id="user-submit" class="button" type="submit">Create account</button></div>
     </form>
+  </dialog>
+
+  <dialog id="company-dialog">
+    <form id="company-form">
+      <div class="dialog-head"><h3 id="company-dialog-title">Register company</h3><button class="close" type="button" data-close="company-dialog" aria-label="Close">×</button></div>
+      <div class="dialog-body">
+        <div class="field"><label for="company-name">Company name</label><input id="company-name" name="name" maxlength="180" required></div>
+        <div class="field"><label for="company-email">Email</label><input id="company-email" name="email" type="email" maxlength="255"></div>
+        <div class="field"><label for="company-phone">Phone</label><input id="company-phone" name="phone" maxlength="60"></div>
+        <div class="field"><label for="company-address">Address</label><textarea id="company-address" name="address" maxlength="2000"></textarea></div>
+      </div>
+      <div class="dialog-foot"><button class="button secondary" type="button" data-close="company-dialog">Cancel</button><button class="button" type="submit">Save company</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="company-members-dialog" class="company-members-dialog">
+    <div class="dialog-head"><h3 id="company-members-title">Company members</h3><button class="close" type="button" data-close="company-members-dialog" aria-label="Close">×</button></div>
+    <div class="dialog-body">
+      <div class="table-wrap">
+        <table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Joined</th></tr></thead><tbody id="company-member-rows"></tbody></table>
+        <div id="company-members-empty" class="empty" hidden>No members are assigned to this company yet.</div>
+      </div>
+    </div>
+    <div class="dialog-foot"><button class="button secondary" type="button" data-close="company-members-dialog">Close</button></div>
   </dialog>
 
   <script src="/assets/app.js" defer></script>

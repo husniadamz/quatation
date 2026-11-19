@@ -31,6 +31,7 @@ var logoAssetPattern = regexp.MustCompile(`^[a-f0-9]{32}\.(png|jpg)$`)
 
 type QuotationTemplateInput struct {
 	CompanyName string
+	CompanyID   uint
 	Name        string
 	Settings    models.QuotationTemplateSettings
 	IsActive    bool
@@ -38,7 +39,7 @@ type QuotationTemplateInput struct {
 }
 
 type QuotationTemplateService interface {
-	List(context.Context, string, bool) ([]models.QuotationTemplate, error)
+	List(context.Context, uint, bool) ([]models.QuotationTemplate, error)
 	Get(context.Context, uint) (*models.QuotationTemplate, error)
 	GetActive(context.Context, uint) (*models.QuotationTemplate, error)
 	Create(context.Context, QuotationTemplateInput) (*models.QuotationTemplate, error)
@@ -59,8 +60,8 @@ func NewQuotationTemplateService(repo repositories.QuotationTemplateRepository, 
 	return &quotationTemplateService{repo: repo, logoDir: logoDir}
 }
 
-func (s *quotationTemplateService) List(ctx context.Context, companyName string, activeOnly bool) ([]models.QuotationTemplate, error) {
-	templates, err := s.repo.List(ctx, companyName, activeOnly)
+func (s *quotationTemplateService) List(ctx context.Context, companyID uint, activeOnly bool) ([]models.QuotationTemplate, error) {
+	templates, err := s.repo.List(ctx, companyID, activeOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -255,6 +256,7 @@ func templateFromInput(input QuotationTemplateInput) (*models.QuotationTemplate,
 		return nil, ErrInvalidInput
 	}
 	return &models.QuotationTemplate{
+		CompanyID:   input.CompanyID,
 		CompanyName: input.CompanyName,
 		Name:        input.Name,
 		Settings:    settings,

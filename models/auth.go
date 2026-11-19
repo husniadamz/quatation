@@ -8,6 +8,8 @@ type User struct {
 	Email        string    `json:"email" gorm:"size:255;not null;uniqueIndex"`
 	PasswordHash string    `json:"-" gorm:"size:255;not null"`
 	Role         string    `json:"role" gorm:"size:20;not null;default:user"`
+	CompanyID    *uint     `json:"company_id,omitempty" gorm:"index"`
+	Company      *Company  `json:"company,omitempty" gorm:"foreignKey:CompanyID"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }

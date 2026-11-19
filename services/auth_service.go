@@ -23,10 +23,18 @@ var ErrForbidden = errors.New("forbidden")
 var ErrLastAdmin = errors.New("cannot delete the last administrator")
 
 type UserInput struct {
-	Name     string
-	Email    string
-	Password string
-	Role     string
+	Name      string
+	Email     string
+	Password  string
+	Role      string
+	CompanyID uint
+}
+
+type UserUpdateInput struct {
+	Name      string
+	Email     string
+	Role      string
+	CompanyID uint
 }
 
 type AuthService interface {
@@ -37,6 +45,7 @@ type AuthService interface {
 	Logout(context.Context, string) error
 	ListUsers(context.Context) ([]models.User, error)
 	CreateUser(context.Context, UserInput) (*models.User, error)
+	UpdateUser(context.Context, uint, UserUpdateInput) (*models.User, error)
 	DeleteUser(context.Context, uint) error
 }
 
@@ -110,14 +119,55 @@ func (s *authService) ListUsers(ctx context.Context) ([]models.User, error) {
 }
 
 func (s *authService) CreateUser(ctx context.Context, input UserInput) (*models.User, error) {
+	if input.CompanyID == 0 {
+		return nil, ErrInvalidInput
+	}
+	exists, err := s.repo.CompanyExists(ctx, input.CompanyID)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, ErrInvalidInput
+	}
 	user, err := newUser(input, input.Role)
 	if err != nil {
 		return nil, err
 	}
+	user.CompanyID = &input.CompanyID
 	if err := s.repo.CreateUser(ctx, user); err != nil {
 		return nil, mapUniqueError(err)
 	}
 	return user, nil
+}
+
+func (s *authService) UpdateUser(ctx context.Context, id uint, input UserUpdateInput) (*models.User, error) {
+	name := strings.TrimSpace(input.Name)
+	email := strings.ToLower(strings.TrimSpace(input.Email))
+	if name == "" || utf8.RuneCountInString(name) > 150 || !validEmail(email) ||
+		(input.Role != models.RoleAdmin && input.Role != models.RoleUser &&
+			input.Role != models.RoleSalesExecutive && input.Role != models.RoleManager) ||
+		input.CompanyID == 0 {
+		return nil, ErrInvalidInput
+	}
+	exists, err := s.repo.CompanyExists(ctx, input.CompanyID)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, ErrInvalidInput
+	}
+	companyID := input.CompanyID
+	user := &models.User{ID: id, Name: name, Email: email, Role: input.Role, CompanyID: &companyID}
+	if err := s.repo.UpdateUser(ctx, user); err != nil {
+		if errors.Is(err, repositories.ErrLastAdmin) {
+			return nil, ErrLastAdmin
+		}
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, mapUniqueError(err)
+	}
+	return s.repo.UserByID(ctx, id)
 }
 
 func (s *authService) DeleteUser(ctx context.Context, id uint) error {

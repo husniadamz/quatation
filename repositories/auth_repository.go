@@ -17,6 +17,8 @@ type AuthRepository interface {
 	SetupRequired(context.Context) (bool, error)
 	CreateFirstUser(context.Context, *models.User) error
 	CreateUser(context.Context, *models.User) error
+	UpdateUser(context.Context, *models.User) error
+	CompanyExists(context.Context, uint) (bool, error)
 	UserByEmail(context.Context, string) (*models.User, error)
 	UserByID(context.Context, uint) (*models.User, error)
 	ListUsers(context.Context) ([]models.User, error)
@@ -61,6 +63,34 @@ func (r *authRepository) CreateUser(ctx context.Context, user *models.User) erro
 	return r.db.WithContext(ctx).Create(user).Error
 }
 
+func (r *authRepository) UpdateUser(ctx context.Context, user *models.User) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var existing models.User
+		if err := tx.First(&existing, user.ID).Error; err != nil {
+			return err
+		}
+		if existing.Role == models.RoleAdmin && user.Role != models.RoleAdmin {
+			var admins int64
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Model(&models.User{}).
+				Where("role = ?", models.RoleAdmin).Count(&admins).Error; err != nil {
+				return err
+			}
+			if admins <= 1 {
+				return ErrLastAdmin
+			}
+		}
+		return tx.Model(&existing).Updates(map[string]interface{}{
+			"name": user.Name, "email": user.Email, "role": user.Role, "company_id": user.CompanyID,
+		}).Error
+	})
+}
+
+func (r *authRepository) CompanyExists(ctx context.Context, id uint) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&models.Company{}).Where("id = ?", id).Count(&count).Error
+	return count > 0, err
+}
+
 func (r *authRepository) UserByEmail(ctx context.Context, email string) (*models.User, error) {
 	var user models.User
 	err := r.db.WithContext(ctx).Where("email = ?", email).First(&user).Error
@@ -72,7 +102,7 @@ func (r *authRepository) UserByEmail(ctx context.Context, email string) (*models
 
 func (r *authRepository) UserByID(ctx context.Context, id uint) (*models.User, error) {
 	var user models.User
-	if err := r.db.WithContext(ctx).First(&user, id).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("Company").First(&user, id).Error; err != nil {
 		return nil, err
 	}
 	return &user, nil
@@ -80,7 +110,7 @@ func (r *authRepository) UserByID(ctx context.Context, id uint) (*models.User, e
 
 func (r *authRepository) ListUsers(ctx context.Context) ([]models.User, error) {
 	var users []models.User
-	err := r.db.WithContext(ctx).Order("id ASC").Find(&users).Error
+	err := r.db.WithContext(ctx).Preload("Company").Order("id ASC").Find(&users).Error
 	return users, err
 }
 

@@ -12,6 +12,7 @@ import (
 
 type templateSnapshotRepository struct{ template models.QuotationTemplate }
 
+func (r templateSnapshotRepository) EnsureStarterTemplate(context.Context) error { return nil }
 func (r templateSnapshotRepository) Create(context.Context, *models.QuotationTemplate) error {
 	return nil
 }
@@ -24,7 +25,7 @@ func (r templateSnapshotRepository) GetActive(context.Context, uint) (*models.Qu
 	}
 	return &r.template, nil
 }
-func (r templateSnapshotRepository) List(context.Context, string, bool) ([]models.QuotationTemplate, error) {
+func (r templateSnapshotRepository) List(context.Context, uint, bool) ([]models.QuotationTemplate, error) {
 	return nil, nil
 }
 func (r templateSnapshotRepository) Update(context.Context, *models.QuotationTemplate) error {

@@ -3,7 +3,6 @@ package repositories
 import (
 	"context"
 	"errors"
-	"strings"
 
 	"quotation/models"
 
@@ -17,7 +16,7 @@ type QuotationTemplateRepository interface {
 	Create(context.Context, *models.QuotationTemplate) error
 	Get(context.Context, uint) (*models.QuotationTemplate, error)
 	GetActive(context.Context, uint) (*models.QuotationTemplate, error)
-	List(context.Context, string, bool) ([]models.QuotationTemplate, error)
+	List(context.Context, uint, bool) ([]models.QuotationTemplate, error)
 	Update(context.Context, *models.QuotationTemplate) error
 	SetActive(context.Context, uint, bool) error
 	SetDefault(context.Context, uint) error
@@ -89,11 +88,11 @@ func (r *quotationTemplateRepository) GetActive(ctx context.Context, id uint) (*
 	return template, nil
 }
 
-func (r *quotationTemplateRepository) List(ctx context.Context, companyName string, activeOnly bool) ([]models.QuotationTemplate, error) {
+func (r *quotationTemplateRepository) List(ctx context.Context, companyID uint, activeOnly bool) ([]models.QuotationTemplate, error) {
 	var templates []models.QuotationTemplate
 	query := r.db.WithContext(ctx).Model(&models.QuotationTemplate{})
-	if name := strings.TrimSpace(companyName); name != "" {
-		query = query.Where("company_name = ?", name)
+	if companyID != 0 {
+		query = query.Where("company_id = ?", companyID)
 	}
 	if activeOnly {
 		query = query.Where("is_active = ?", true)

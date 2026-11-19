@@ -12,7 +12,7 @@ import (
 func New(customers *controllers.CustomerController, quotations *controllers.QuotationController,
 	auth *controllers.AuthController, dashboard *controllers.DashboardController,
 	templates *controllers.QuotationTemplateController,
-	authService services.AuthService) (*gin.Engine, error) {
+	authService services.AuthService, companies *controllers.CompanyController) (*gin.Engine, error) {
 	router := gin.New()
 	router.Use(gin.Logger(), gin.Recovery())
 	if err := router.SetTrustedProxies(nil); err != nil {
@@ -66,7 +66,17 @@ func New(customers *controllers.CustomerController, quotations *controllers.Quot
 	{
 		userRoutes.GET("", auth.ListUsers)
 		userRoutes.POST("", middleware.RequirePermission(middleware.ResourceUsers, middleware.ActionWrite), auth.CreateUser)
+		userRoutes.PUT("/:id", middleware.RequirePermission(middleware.ResourceUsers, middleware.ActionWrite), auth.UpdateUser)
 		userRoutes.DELETE("/:id", middleware.RequirePermission(middleware.ResourceUsers, middleware.ActionDelete), auth.DeleteUser)
 	}
+	companyRoutes := protected.Group("/companies", middleware.RequirePermission(middleware.ResourceCompanies, middleware.ActionRead))
+	{
+		companyRoutes.GET("", companies.List)
+		companyRoutes.GET("/:id", companies.Get)
+		companyRoutes.GET("/:id/users", companies.ListMembers)
+	}
+	companyRoutes.POST("", middleware.RequirePermission(middleware.ResourceCompanies, middleware.ActionWrite), companies.Create)
+	companyRoutes.PUT("/:id", middleware.RequirePermission(middleware.ResourceCompanies, middleware.ActionWrite), companies.Update)
+	companyRoutes.DELETE("/:id", middleware.RequirePermission(middleware.ResourceCompanies, middleware.ActionDelete), companies.Delete)
 	return router, nil
 }

@@ -17,10 +17,11 @@ func NewAuthController(service services.AuthService) *AuthController {
 }
 
 type authRequest struct {
-	Name     string `json:"name" binding:"required,max=150"`
-	Email    string `json:"email" binding:"required,email,max=255"`
-	Password string `json:"password" binding:"required,min=10,max=72"`
-	Role     string `json:"role"`
+	Name      string `json:"name" binding:"required,max=150"`
+	Email     string `json:"email" binding:"required,email,max=255"`
+	Password  string `json:"password" binding:"required,min=10,max=72"`
+	Role      string `json:"role"`
+	CompanyID uint   `json:"company_id"`
 }
 
 type loginRequest struct {
@@ -28,8 +29,15 @@ type loginRequest struct {
 	Password string `json:"password" binding:"required,max=72"`
 }
 
+type userUpdateRequest struct {
+	Name      string `json:"name" binding:"required,max=150"`
+	Email     string `json:"email" binding:"required,email,max=255"`
+	Role      string `json:"role" binding:"required"`
+	CompanyID uint   `json:"company_id" binding:"required"`
+}
+
 func (r authRequest) input() services.UserInput {
-	return services.UserInput{Name: r.Name, Email: r.Email, Password: r.Password, Role: r.Role}
+	return services.UserInput{Name: r.Name, Email: r.Email, Password: r.Password, Role: r.Role, CompanyID: r.CompanyID}
 }
 
 func (h *AuthController) SetupStatus(c *gin.Context) {
@@ -108,6 +116,26 @@ func (h *AuthController) CreateUser(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"data": user})
+}
+
+func (h *AuthController) UpdateUser(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var request userUpdateRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		writeError(c, http.StatusBadRequest, "provide valid name, email, role, and company data")
+		return
+	}
+	user, err := h.service.UpdateUser(c.Request.Context(), id, services.UserUpdateInput{
+		Name: request.Name, Email: request.Email, Role: request.Role, CompanyID: request.CompanyID,
+	})
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": user})
 }
 
 func (h *AuthController) DeleteUser(c *gin.Context) {
